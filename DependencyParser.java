@@ -3,7 +3,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 
 public class DependencyParser {
 	
@@ -88,9 +91,6 @@ public class DependencyParser {
 		it = labels.iterator();
 		while (it.hasNext()) {
 			String label = it.next();
-			if (label.equals("root")) {
-				continue;
-			}
 			this.labels.put(labelId, label);
 			this.reverseLabels.put(label, labelId);
 			this.labelsList.add(label);
@@ -172,23 +172,104 @@ public class DependencyParser {
 		return dTree;
 	}
 	
-	public DependencyTree getOracleDependencyTree(List<Token> sentence) {
+	public void saveOracleDependencyTreeParse(List<Token> sentence, DependencyTree goldTree, PrintWriter writer) {
 		ArcStandard standard = new ArcStandard(this.labelsList);
-		DependencyTree realDTree = this.getSentenceDependencyTree(sentence);
 		Configuration c = standard.initialConfiguration(sentence);
+		List<ConfigurationState> configurationStates = new LinkedList<ConfigurationState>();
+		List<String> transitions = new LinkedList<String>();
 		while (!standard.isTerminal(c)) {
-			String transition = standard.getOracle(c, realDTree);
+			//TODO get state and transition and save in a file to use for training
+			ConfigurationState state = this.extractConfigurationState(c);
+			configurationStates.add(state);
+			String transition = standard.getOracle(c, goldTree);
+			transitions.add(transition);
 			standard.apply(c, transition);
 		}
-		return c.getDependencyTree();
+		DependencyTree predictedTree = c.getDependencyTree();
+		predictedTree.sort();
+		boolean equal = goldTree.equals(predictedTree);
+		if (equal) {
+			Iterator<ConfigurationState> csIt = configurationStates.iterator();
+			Iterator<String> trIt = transitions.iterator();
+			while (csIt.hasNext() && trIt.hasNext()) {
+				ConfigurationState cs = csIt.next();
+				String transition = trIt.next();
+				writer.println(cs.toString() + transition);
+			}
+		} else {
+			System.out.println("false");
+		}
 	}
 	
-//	public void printDependencyTree(DependencyTree tree) {
-//		for (Arc arc : tree) {
-//			System.out.println(this.vocabulary.get(arc.getHeadSentenceId()) + " " + arc.getLabel() + " " +
-//					this.vocabulary.get(arc.getChildSentenceId()) + " " + arc.getDirection());
-//		}
-//	}
+	private ConfigurationState extractConfigurationState(Configuration c) {
+		ConfigurationState state = new ConfigurationState();
+		int stackIndex = 0;
+		while (stackIndex < 3) {
+			int sentenceIndex = c.getStack(stackIndex);
+			this.addWordToState(c, state, sentenceIndex, false);
+			if (stackIndex < 2) {
+				if (sentenceIndex <= 0) {
+					state.addWords(Collections.nCopies(6, 0));
+					state.addPOStags(Collections.nCopies(6, 0));
+					state.addLabels(Collections.nCopies(6, 0));
+				} else {
+					this.addChildren(c, sentenceIndex, true, state);
+					this.addChildren(c, sentenceIndex, false, state);
+				}
+			}
+			++stackIndex;
+		}
+		int bufferIndex = 0;
+		while (bufferIndex < 3) {
+			int sentenceIndex = c.getBuffer(bufferIndex);
+			this.addWordToState(c, state, sentenceIndex, false);
+			++bufferIndex;
+		}
+		return state;
+	}
+	
+	private void addChildren(Configuration c, int word, boolean left, ConfigurationState state) {
+		int childCount = 1;
+		while (childCount < 3) {
+			int child;
+			if (left) {
+				child = c.getLeftChild(word, childCount);
+			} else {
+				child = c.getRightChild(word, childCount);
+			}
+			this.addWordToState(c, state, child, true);
+			if (childCount == 1) {
+				if (child < 0) {
+					this.addWordToState(c, state, 0, true);
+				} else {
+					int grandChild;
+					if (left) {
+						grandChild = c.getLeftChild(child, childCount);
+					} else {
+						grandChild = c.getRightChild(child, childCount);
+					}
+					this.addWordToState(c, state, grandChild, true);
+				}
+			}
+			++childCount;
+		}
+	}
+	
+	private void addWordToState(Configuration c, ConfigurationState state, int word, boolean addLabel) {
+		if (word <= 0) {
+			state.addWord(0);
+			state.addPOStag(0);
+			if (addLabel) {
+				state.addLabel(0);
+			}
+		} else {
+			state.addWord(this.reverseVocabulary.get(c.getWord(word)));
+			state.addPOStag(this.reverseTags.get(c.getPOS(word)));
+			if (addLabel) {
+				state.addLabel(this.reverseLabels.get(c.getLabel(word)));
+			}
+		}
+	}
 	
 	public static void main(String[] args) {
 		int sentence = 0;
@@ -201,36 +282,31 @@ public class DependencyParser {
 		parser.initializeData();
 
 		int count = 0;
-		while (parser.hasNextSentence()) {
-			List<Token> parsedSentence = parser.tokenizeNextSentence();
-			++count;
-			if (sentence != 0) {
-				if (sentence < count) {
-					break;
+		PrintWriter writer = null;
+		try {
+			writer = new PrintWriter("trainingdata.txt", "UTF-8");
+			while (parser.hasNextSentence()) {
+				List<Token> parsedSentence = parser.tokenizeNextSentence();
+				++count;
+				if (sentence != 0) {
+					if (sentence < count) {
+						break;
+					}
+					if (sentence > count) {
+						continue;
+					}
 				}
-				if (sentence > count) {
-					continue;
-				}
-			}
-			DependencyTree dTree = parser.getSentenceDependencyTree(parsedSentence);
-			dTree.sort();
-			
-			DependencyTree predictedTree = parser.getOracleDependencyTree(parsedSentence);
-//			System.out.println(predictedTree);
-//			parser.printDependencyTree(predictedTree);
-			
-			predictedTree.sort();
-			
-			boolean equal = dTree.equals(predictedTree);
-			System.out.println(equal);	
-			if (!equal) {
-//				System.out.println(dTree);
-//				parser.printDependencyTree(dTree);
+				DependencyTree dTree = parser.getSentenceDependencyTree(parsedSentence);
+				dTree.sort();
 				
-//				System.out.print(predictedTree);
-//				parser.printDependencyTree(predictedTree);
+				parser.saveOracleDependencyTreeParse(parsedSentence, dTree, writer);
+			}
+		} catch (FileNotFoundException | UnsupportedEncodingException e) {
+			System.err.println("Could not open file for writing training data!");
+		} finally {
+			if (writer != null) {
+				writer.close();
 			}
 		}
-		
 	}
 }

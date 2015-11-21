@@ -34,6 +34,9 @@ public class Configuration {
 	 * Get the sentence index of the k-th word on the buffer
 	 */
 	public int getBuffer(int k) {
+		if (k >= this.buffer.size()) {
+			return -1;
+		}
 		return buffer.get(k);
 	}
 
@@ -151,22 +154,6 @@ public class Configuration {
 	
 	public DependencyTree getDependencyTree() {
 		return arcs;
-	}
-	
-	public ConfigurationState getState() {
-		ConfigurationState state = new ConfigurationState();
-		
-		int stackIndex = 2;
-		while (stackIndex >= 0) {
-			int sentenceIndex = this.getStack(stackIndex);
-			if (sentenceIndex < 0) {
-				state.addWord(0);
-			} else {
-				state.addWord(this.sentence.get(sentenceIndex).getId());
-			}
-			++stackIndex;
-		}
-		return state;
 	}
 	
 	private int countChildren(int k, DependencyTree tree) {
