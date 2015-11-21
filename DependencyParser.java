@@ -9,6 +9,7 @@ public class DependencyParser {
 	
 	private Path filePath;
 	private BufferedReader reader;
+	private boolean EOFreached;
 	private Map<Integer, String> vocabulary;
 	private Map<Integer, String> tags;
 	private Map<Integer, String> labels;
@@ -18,6 +19,7 @@ public class DependencyParser {
 	private Map<String, Integer> reverseLabels;
 	
 	public void openFile(Path filePath) {
+		this.EOFreached = false;
 		this.filePath = filePath;
 		try {
 			reader = Files.newBufferedReader(filePath);
@@ -36,6 +38,7 @@ public class DependencyParser {
 			try {
 				line = reader.readLine();
 				if (line == null) {
+					this.EOFreached = true;
 					break;
 				}
 			} catch (IOException e) {
@@ -128,13 +131,18 @@ public class DependencyParser {
 		return this.vocabulary.get(id);
 	}
 	
-	public List<Token> tokenizeSentence() {
+	public boolean hasNextSentence() {
+		return !this.EOFreached;
+	}
+	
+	public List<Token> tokenizeNextSentence() {
 		String line = new String();
 		List<Token> words = new LinkedList<Token>();
 		while (line != null) {
 			try {
 				line = reader.readLine();
 				if (line == null) {
+					this.EOFreached = true;
 					break;
 				}
 			} catch (IOException e) {
@@ -157,8 +165,8 @@ public class DependencyParser {
 			Token token = sentence.get(i);
 
 			int headIdx = token.getHead();
-			int head = (0 == headIdx) ? headIdx : this.reverseVocabulary.get(sentence.get(headIdx-1).getLemma());
-			int dependent = this.reverseVocabulary.get(token.getLemma());
+			int head = (0 == headIdx) ? headIdx : sentence.get(headIdx - 1).getSentenceId();//this.reverseVocabulary.get(sentence.get(headIdx-1).getLemma());
+			int dependent = token.getSentenceId();//this.reverseVocabulary.get(token.getLemma());
 			dTree.add(new Arc(head, dependent, token.getLabel()));	
 		}
 		return dTree;
@@ -175,26 +183,54 @@ public class DependencyParser {
 		return c.getDependencyTree();
 	}
 	
+//	public void printDependencyTree(DependencyTree tree) {
+//		for (Arc arc : tree) {
+//			System.out.println(this.vocabulary.get(arc.getHeadSentenceId()) + " " + arc.getLabel() + " " +
+//					this.vocabulary.get(arc.getChildSentenceId()) + " " + arc.getDirection());
+//		}
+//	}
+	
 	public static void main(String[] args) {
+		int sentence = 0;
+		if (args.length > 0) {
+			sentence = Integer.parseInt(args[0]);
+		}
 		Path path = FileSystems.getDefault().getPath("/home/gterziev/UvA/Year1/Semester1/Period2/Natural Language Processing/Project/UD_English-master", "en-ud-train.conllu");
 		DependencyParser parser = new DependencyParser();
 		parser.openFile(path);
 		parser.initializeData();
 
-		List<Token> parsedSentence = parser.tokenizeSentence();
-		DependencyTree dTree = parser.getSentenceDependencyTree(parsedSentence);
-		dTree.sort();
-		for (Arc arc : dTree) {
-			System.out.println(parser.getWord(arc.getHead()) + " " + arc.getLabel() + " " + parser.getWord(arc.getChild())
-			+ " (" + (arc.getHead() < arc.getChild() ? "right" : "left") + ")");
+		int count = 0;
+		while (parser.hasNextSentence()) {
+			List<Token> parsedSentence = parser.tokenizeNextSentence();
+			++count;
+			if (sentence != 0) {
+				if (sentence < count) {
+					break;
+				}
+				if (sentence > count) {
+					continue;
+				}
+			}
+			DependencyTree dTree = parser.getSentenceDependencyTree(parsedSentence);
+			dTree.sort();
+			
+			DependencyTree predictedTree = parser.getOracleDependencyTree(parsedSentence);
+//			System.out.println(predictedTree);
+//			parser.printDependencyTree(predictedTree);
+			
+			predictedTree.sort();
+			
+			boolean equal = dTree.equals(predictedTree);
+			System.out.println(equal);	
+			if (!equal) {
+//				System.out.println(dTree);
+//				parser.printDependencyTree(dTree);
+				
+//				System.out.print(predictedTree);
+//				parser.printDependencyTree(predictedTree);
+			}
 		}
 		
-		System.out.println("Predicted Tree");
-		DependencyTree predictedTree = parser.getOracleDependencyTree(parsedSentence);
-		predictedTree.sort();
-		for (Arc arc : predictedTree) {
-			System.out.println(parser.getWord(arc.getHead()) + " " + arc.getLabel() + " " + parser.getWord(arc.getChild())
-			+ " (" + (arc.getHead() < arc.getChild() ? "right" : "left") + ")");
-		}
 	}
 }
