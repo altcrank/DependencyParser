@@ -1,29 +1,34 @@
 
 public class Arc implements Comparable<Arc> {
-	private int child;
+
 	private int head;
+	private int child;
 	private String label;
 	
 	public Arc(int head, int child) {
 		this(head, child, "");
 	}
 	
-	public Arc(int head, int child, String label) {
-		this.head = head;
+	public Arc(int headSentenceId, int child, String label) {
+		this.head = headSentenceId;
 		this.child = child;
 		this.label = label;
 	}
 	
-	public int getChild() {
-		return child;
+	public int getHead() {
+		return this.head;
 	}
 
-	public int getHead() {
-		return head;
+	public int getChild() {
+		return this.child;
 	}
 	
 	public String getLabel() {
 		return label;
+	}
+	
+	public String getDirection() {
+		return (head < child) ? "right" : "left";
 	}
 	
 	public boolean equals(Object other) {
@@ -53,5 +58,16 @@ public class Arc implements Comparable<Arc> {
 			return headDiff;
 		}
 		return this.child - other.child;
+	}
+	
+	@Override
+	public String toString() {
+		String result = String.valueOf(this.head);
+		result += " ";
+		result += String.valueOf(this.label);
+		result += " ";
+		result += String.valueOf(this.child);
+		result += " ";
+		return result + this.getDirection();
 	}
 }
