@@ -1,6 +1,27 @@
 package common;
 
+import java.util.Random;
+
 public class MatrixOperations {
+	
+	public static double[] randomInitialize(int size, double lowerLimit, double upperLimit) {
+		Random random = new Random();
+		double[] result = new double[size];
+		for (int i = 0; i < result.length; ++i) {
+			result[i] = MatrixOperations.scale(random.nextDouble(), 0, 1, lowerLimit, upperLimit);
+		}
+		return result;
+	}
+	
+	public static double[][] randomInitialize(int rows, int cols, double lowerLimit, double upperLimit) {
+		Random random = new Random();
+		double[][] result = new double[rows][cols];
+		for (int row = 0; row < result.length; ++row) {
+			for (int col = 0; col < result[0].length; ++col)
+			result[row][col] = MatrixOperations.scale(random.nextDouble(), 0, 1, lowerLimit, upperLimit);
+		}
+		return result;
+	}
 	
 	public static double[] multiply(double[][] matrix, double[] vector) {
 		double[] result = new double[matrix.length];
@@ -59,5 +80,10 @@ public class MatrixOperations {
 			}
 		}
 		return maxIndex;
+	}
+	
+	private static double scale(double number, double oldMin, double oldMax, double newMin, double newMax) {
+		double t = (number - oldMin) / (oldMax - oldMin);
+		return (1 - t) * newMin + t * newMax;
 	}
 }

@@ -25,17 +25,18 @@ public class NeuralNetwork {
 		this.tagInputsCount = tagInputsCount;
 		this.labelInputsCount = labelInputsCount;
 		this.embeddingSize = embeddingSize;
-		this.wordEmbeddings = new double[this.embeddingSize][vocabularySize];
-		this.tagEmbeddings = new double[this.embeddingSize][tagsCount];
-		this.labelEmbeddings = new double[this.embeddingSize][labelsCount];
 		
-		this.wordWeights = new double[hiddens][this.embeddingSize*this.wordInputsCount];
-		this.tagWeights = new double[hiddens][this.embeddingSize*this.tagInputsCount];
-		this.labelWeights = new double[hiddens][this.embeddingSize*this.labelInputsCount];
+		this.wordEmbeddings = MatrixOperations.randomInitialize(this.embeddingSize, vocabularySize, -1.0, 1.0);
+		this.tagEmbeddings = MatrixOperations.randomInitialize(this.embeddingSize, tagsCount, -1.0, 1.0);
+		this.labelEmbeddings = MatrixOperations.randomInitialize(this.embeddingSize, labelsCount, -1.0, 1.0);
 		
-		this.biases = new double[hiddens];
+		this.wordWeights = MatrixOperations.randomInitialize(hiddens, this.embeddingSize*this.wordInputsCount, -1.0, 1.0);
+		this.tagWeights = MatrixOperations.randomInitialize(hiddens, this.embeddingSize*this.tagInputsCount, -1.0, 1.0);
+		this.labelWeights = MatrixOperations.randomInitialize(hiddens, this.embeddingSize*this.labelInputsCount, -1.0, 1.0);
 		
-		this.softMaxWeights = new double[transitionsCount][hiddens];
+		this.biases = MatrixOperations.randomInitialize(hiddens, -1.0, 1.0);
+		
+		this.softMaxWeights = MatrixOperations.randomInitialize(transitionsCount, hiddens, -1.0, 1.0);
 	}
 	
 	public int chooseTransition(int[] wordInputs, int[] tagInputs, int[] labelInputs) {
