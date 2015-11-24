@@ -14,8 +14,8 @@ public class DependencyTree extends LinkedList<Arc> {
 	public List<Integer> getSortedChildren(int head) {
 		List<Integer> children = new LinkedList<Integer>();
 		for (Arc arc : this) {
-			if (head == arc.getHead()) {
-				children.add(arc.getChild());
+			if (head == arc.getHeadSentenceIndex()) {
+				children.add(arc.getDependentSentenceIndex());
 			}
 		}
 		Collections.sort(children);

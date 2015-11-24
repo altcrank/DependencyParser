@@ -37,11 +37,11 @@ public class Configuration {
 		if (k >= this.buffer.size()) {
 			return -1;
 		}
-		return buffer.get(k);
+		return this.buffer.get(k);
 	}
 
 	public int getBufferSize() {
-		return buffer.size();
+		return this.buffer.size();
 	}
 	
 	/**
@@ -51,14 +51,14 @@ public class Configuration {
 		if (0 == k) {
 			return -1;
 		}
-		return sentence.get(k - 1).getHead();
+		return this.sentence.get(k - 1).getHead();
 	}
 
 	public String getLabel(int k) {
 		if (0 == k) {
 			return "";
 		}
-		return sentence.get(k - 1).getLabel();
+		return this.sentence.get(k - 1).getLabel();
 	}
 
 	public int getLeftChild(int k, int cnt) {
@@ -82,7 +82,7 @@ public class Configuration {
 		if (0 == k) {
 			return "ROOT";
 		}
-		return sentence.get(k - 1).getPOSTag();
+		return this.sentence.get(k - 1).getPOSTag();
 	}
 	
 	public int getRightChild(int k, int cnt) {
@@ -107,59 +107,59 @@ public class Configuration {
 //	}
 	
 	public int getStack(int k) {
-		if (stack.size() - (1 + k) < 0) {
+		if (this.stack.size() - (1 + k) < 0) {
 			return -1;
 		}
-		return stack.get(stack.size() - (1 + k));
+		return this.stack.get(this.stack.size() - (1 + k));
 	}
 	
 	public int getStackSize() {
-		return stack.size();
+		return this.stack.size();
 	}
 	
 	public String getWord(int k) {
 		if (0 == k) {
 			return "ROOT";
 		}
-		return sentence.get(k-1).getLemma();
+		return this.sentence.get(k-1).getLemma();
 	}
 	
 	public boolean hasOtherChild(int k, DependencyTree goldTree) {
-		return this.countChildren(k, arcs) != this.countChildren(k, goldTree);
+		return this.countChildren(k, this.arcs) != this.countChildren(k, goldTree);
 	}
 	
 	public boolean removeSecondTopStack() {
-		if (stack.size() < 2) {
+		if (this.stack.size() < 2) {
 			return false;
 		}
-		stack.remove(stack.size() - 2);
+		this.stack.remove(this.stack.size() - 2);
 		return true;
 	}
 	
 	public boolean removeTopStack() {
-		if (stack.isEmpty()) {
+		if (this.stack.isEmpty()) {
 			return false;
 		}
-		stack.remove(stack.size() - 1);
+		this.stack.remove(this.stack.size() - 1);
 		return true;
 	}
 	
 	public boolean shift() {
-		if (buffer.isEmpty()) {
+		if (this.buffer.isEmpty()) {
 			return false;
 		}
-		stack.add(buffer.remove(0).intValue());
+		this.stack.add(this.buffer.remove(0).intValue());
 		return true;
 	}
 	
 	public DependencyTree getDependencyTree() {
-		return arcs;
+		return this.arcs;
 	}
 	
 	private int countChildren(int k, DependencyTree tree) {
 		int count = 0;
 		for (Arc arc : tree) {
-			if (arc.getHead() == k) {
+			if (arc.getHeadSentenceIndex() == k) {
 				++count;
 			}
 		}

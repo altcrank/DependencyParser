@@ -13,6 +13,23 @@ public class DependencyParser {
 	private Path filePath;
 	private BufferedReader reader;
 	private boolean EOFreached;
+	private static final String header =  //words
+										  "s1,lc1(s1),lc1(lc1(s1)),lc2(s1),rc1(s1),rc1(rc1(s1)),rc2(s1),"
+										+ "s2,lc1(s2),lc1(lc1(s2)),lc2(s2),rc1(s2),rc1(rc1(s2)),rc2(s2),"
+										+ "s3,b1,b2,b3,"
+										  //corresponding POS tags
+										+ "s1.t,lc1(s1).t,lc1(lc1(s1)).t,lc2(s1).t,rc1(s1).t,rc1(rc1(s1)).t,rc2(s1).t,"
+										+ "s2.t,lc1(s2).t,lc1(lc1(s2)).t,lc2(s2).t,rc1(s2).t,rc1(rc1(s2)).t,rc2(s2).t,"
+										+ "s3.t,b1.t,b2.t,b3.t,"
+										  //corresponding arcs
+										  //except the 3 words on the stack and the 3 on the buffer since they don't have eny yet
+										+ "lc1(s1).l,lc1(lc1(s1)).l,lc2(s1).l,rc1(s1).l,rc1(rc1(s1)).l,rc2(s1).l,"
+										+ "lc1(s2).l,lc1(lc1(s2)).l,lc2(s2).l,rc1(s2).l,rc1(rc1(s2)).l,rc2(s2).l,"
+										  //transition
+										+ "transition";
+	
+	private ArcStandard arcStandard;
+	
 	private Map<Integer, String> vocabulary;
 	private Map<Integer, String> tags;
 	private Map<Integer, String> labels;
@@ -21,11 +38,27 @@ public class DependencyParser {
 	private Map<String, Integer> reverseTags;
 	private Map<String, Integer> reverseLabels;
 	
+	public DependencyParser() {
+		this.filePath = null;
+		this.reader = null;
+		this.EOFreached = true;
+		//arc standard needs to be passed labels
+		this.arcStandard = null;
+		this.vocabulary = new HashMap<Integer, String>();
+		this.tags = new HashMap<Integer, String>();
+		this.labels = new HashMap<Integer, String>();
+		//we want to know how many labels we have before we initialize this
+		this.labelsList = null;
+		this.reverseVocabulary = new HashMap<String, Integer>();
+		this.reverseTags = new HashMap<String, Integer>();
+		this.reverseLabels = new HashMap<String, Integer>();
+	}
+	
 	public void openFile(Path filePath) {
 		this.EOFreached = false;
 		this.filePath = filePath;
 		try {
-			reader = Files.newBufferedReader(filePath);
+			reader = Files.newBufferedReader(this.filePath);
 		} catch (IOException e) {
 			System.err.println("Could not open conllu file: " + filePath);
 			System.out.println("Could not open conllu file: " + filePath.getFileName());
@@ -33,13 +66,15 @@ public class DependencyParser {
 	}
 	
 	public void initializeData() {
-		String line = new String();
+		//Tree sets because for some reason I though it might be nice
+		//if they are ordered alphabetically
 		Set<String> words = new TreeSet<String>();
 		Set<String> tags = new TreeSet<String>();
 		Set<String> labels = new TreeSet<String>();
+		String line = new String();
 		while (line != null) {
 			try {
-				line = reader.readLine();
+				line = this.reader.readLine();
 				if (line == null) {
 					this.EOFreached = true;
 					break;
@@ -58,45 +93,10 @@ public class DependencyParser {
 			labels.add(token.getLabel());
 		}
 		
-		
-		vocabulary = new HashMap<Integer, String>();
-		reverseVocabulary = new HashMap<String, Integer>();
-		int wordId = 1;
-		Iterator<String> it = words.iterator();
-		while (it.hasNext()) {
-			String word = it.next();
-			vocabulary.put(wordId, word);
-			reverseVocabulary.put(word, wordId);
-			++wordId;
-		}
-		//add ROOT
-		this.vocabulary.put(0, "ROOT");
-		this.reverseVocabulary.put("ROOT", 0);
-		
-		this.tags = new HashMap<Integer, String>();
-		this.reverseTags = new HashMap<String, Integer>();
-		int tagId = 1;
-		it = tags.iterator();
-		while (it.hasNext()) {
-			String tag = it.next();
-			this.tags.put(tagId, tag);
-			this.reverseTags.put(tag, tagId);
-			++tagId;
-		}
-		
-		this.labels = new HashMap<Integer, String>();
-		this.reverseLabels = new HashMap<String, Integer>();
-		this.labelsList = new ArrayList<String>(labels.size());
-		int labelId = 1;
-		it = labels.iterator();
-		while (it.hasNext()) {
-			String label = it.next();
-			this.labels.put(labelId, label);
-			this.reverseLabels.put(label, labelId);
-			this.labelsList.add(label);
-			++labelId;
-		}
-		
+		this.populateVocabulary(words);
+		this.populatePOStags(tags);
+		this.populateLabels(labels);
+		this.initializeArcStandard();
 		try {
 			reader.close();
 		} catch (IOException e) {
@@ -104,6 +104,48 @@ public class DependencyParser {
 			e.printStackTrace();
 		}
 		this.openFile(filePath);
+	}
+	
+	private void populateVocabulary(Set<String> words) {
+		int wordId = 1;
+		Iterator<String> it = words.iterator();
+		while (it.hasNext()) {
+			String word = it.next();
+			this.vocabulary.put(wordId, word);
+			this.reverseVocabulary.put(word, wordId);
+			++wordId;
+		}
+		//add ROOT
+		this.vocabulary.put(0, "ROOT");
+		this.reverseVocabulary.put("ROOT", 0);
+	}
+	
+	private void populatePOStags(Set<String> tags) {
+		this.tags = new HashMap<Integer, String>();
+		this.reverseTags = new HashMap<String, Integer>();
+		int tagId = 1;
+		Iterator<String> it = tags.iterator();
+		while (it.hasNext()) {
+			String tag = it.next();
+			this.tags.put(tagId, tag);
+			this.reverseTags.put(tag, tagId);
+			++tagId;
+		}
+	}
+	
+	private void populateLabels(Set<String> labels) {
+		this.labels = new HashMap<Integer, String>();
+		this.reverseLabels = new HashMap<String, Integer>();
+		this.labelsList = new ArrayList<String>(labels.size());
+		int labelId = 1;
+		Iterator<String> it = labels.iterator();
+		while (it.hasNext()) {
+			String label = it.next();
+			this.labels.put(labelId, label);
+			this.reverseLabels.put(label, labelId);
+			this.labelsList.add(label);
+			++labelId;
+		}
 	}
 	
 	public void printVocabulary() {
@@ -124,10 +166,11 @@ public class DependencyParser {
 		}
 	}
 	
+	private void initializeArcStandard() {
+		this.arcStandard = new ArcStandard(this.labelsList);
+	}
+	
 	public String getWord(int id) {
-		if (0 == id) {
-			return "ROOT";
-		}
 		return this.vocabulary.get(id);
 	}
 	
@@ -165,25 +208,27 @@ public class DependencyParser {
 			Token token = sentence.get(i);
 
 			int headIdx = token.getHead();
-			int head = (0 == headIdx) ? headIdx : sentence.get(headIdx - 1).getSentenceId();//this.reverseVocabulary.get(sentence.get(headIdx-1).getLemma());
-			int dependent = token.getSentenceId();//this.reverseVocabulary.get(token.getLemma());
-			dTree.add(new Arc(head, dependent, token.getLabel()));	
+//			int head = (0 == headIdx) ? headIdx : sentence.get(headIdx-1).getId();
+			int headSentenceIndex = (0 == headIdx) ? headIdx : sentence.get(headIdx - 1).getSentenceId();
+//			int dependent = token.getId();
+			int depSentenceIndex = token.getSentenceId();
+//			dTree.add(new Arc(head, headSentenceIndex, dependent, depSentenceIndex, token.getLabel()));
+			dTree.add(new Arc(headSentenceIndex, depSentenceIndex, token.getLabel()));
 		}
 		return dTree;
 	}
 	
 	public void saveOracleDependencyTreeParse(List<Token> sentence, DependencyTree goldTree, PrintWriter writer) {
-		ArcStandard standard = new ArcStandard(this.labelsList);
-		Configuration c = standard.initialConfiguration(sentence);
+		Configuration c = this.arcStandard.initialConfiguration(sentence);
 		List<ConfigurationState> configurationStates = new LinkedList<ConfigurationState>();
 		List<String> transitions = new LinkedList<String>();
-		while (!standard.isTerminal(c)) {
+		while (!this.arcStandard.isTerminal(c)) {
 			//TODO get state and transition and save in a file to use for training
 			ConfigurationState state = this.extractConfigurationState(c);
 			configurationStates.add(state);
-			String transition = standard.getOracle(c, goldTree);
+			String transition = this.arcStandard.getOracle(c, goldTree);
 			transitions.add(transition);
-			standard.apply(c, transition);
+			this.arcStandard.apply(c, transition);
 		}
 		DependencyTree predictedTree = c.getDependencyTree();
 		predictedTree.sort();
@@ -193,8 +238,8 @@ public class DependencyParser {
 			Iterator<String> trIt = transitions.iterator();
 			while (csIt.hasNext() && trIt.hasNext()) {
 				ConfigurationState cs = csIt.next();
-				String transition = trIt.next();
-				writer.println(cs.toString() + transition);
+				int transitionId = this.arcStandard.getTransitionId(trIt.next());
+				writer.println(cs.toString() + transitionId);
 			}
 		} else {
 			System.out.println("false");
@@ -248,7 +293,7 @@ public class DependencyParser {
 					} else {
 						grandChild = c.getRightChild(child, childCount);
 					}
-					this.addWordToState(c, state, grandChild, true);
+					this.addWordToState(c, state, grandChild, true);					
 				}
 			}
 			++childCount;
@@ -285,6 +330,7 @@ public class DependencyParser {
 		PrintWriter writer = null;
 		try {
 			writer = new PrintWriter("trainingdata.txt", "UTF-8");
+			writer.println(DependencyParser.header);
 			while (parser.hasNextSentence()) {
 				List<Token> parsedSentence = parser.tokenizeNextSentence();
 				++count;

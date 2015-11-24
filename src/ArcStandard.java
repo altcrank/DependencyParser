@@ -106,7 +106,7 @@ public class ArcStandard {
 		Arc leftArc = new Arc(top, belowTop);
 		for (Arc arc : dTree) {
 			if (0 == leftArc.partialCompareTo(arc)) {
-				if (!c.hasOtherChild(leftArc.getChild(), dTree)) {
+				if (!c.hasOtherChild(leftArc.getDependentSentenceIndex(), dTree)) {
 					return this.left + arc.getLabel();
 				}
 			}
@@ -115,7 +115,7 @@ public class ArcStandard {
 		Arc rightArc = new Arc(belowTop, top);
 		for (Arc arc : dTree) {
 			if (0 == rightArc.partialCompareTo(arc)) {
-				if (!c.hasOtherChild(rightArc.getChild(), dTree)) {
+				if (!c.hasOtherChild(rightArc.getDependentSentenceIndex(), dTree)) {
 					return this.right + arc.getLabel();
 				}
 			}
