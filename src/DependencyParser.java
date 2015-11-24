@@ -321,7 +321,7 @@ public class DependencyParser {
 		if (args.length > 0) {
 			sentence = Integer.parseInt(args[0]);
 		}
-		Path path = FileSystems.getDefault().getPath("/home/gterziev/UvA/Year1/Semester1/Period2/Natural Language Processing/Project/UD_English-master", "en-ud-train.conllu");
+		Path path = FileSystems.getDefault().getPath("data/UD_English", "en-ud-train.conllu");
 		DependencyParser parser = new DependencyParser();
 		parser.openFile(path);
 		parser.initializeData();
@@ -329,7 +329,7 @@ public class DependencyParser {
 		int count = 0;
 		PrintWriter writer = null;
 		try {
-			writer = new PrintWriter("trainingdata.txt", "UTF-8");
+			writer = new PrintWriter("data/trainingdata.csv", "UTF-8");
 			writer.println(DependencyParser.header);
 			while (parser.hasNextSentence()) {
 				List<Token> parsedSentence = parser.tokenizeNextSentence();
