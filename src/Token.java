@@ -10,40 +10,50 @@ public class Token {
 	private String label;
 	
 	public Token(String[] args, int id) {
-		sentenceIndex = Integer.parseInt(args[0]);
+		this.sentenceIndex = Integer.parseInt(args[0]);
 		this.id = id;
-		word = args[1];
-		lemma = args[2];
-		POS = args[4];
-		head = Integer.parseInt(args[6]);
-		label = args[7];
+		this.word = args[1];
+		this.lemma = args[2];
+		this.POS = args[4];
+		this.head = Integer.parseInt(args[6]);
+		this.label = args[7];
+	}
+	
+	public Token(int sentenceIndex, int id, String word, String lemma, String pos, int head, String label) {
+		this.sentenceIndex = sentenceIndex;
+		this.id = id;
+		this.word = word;
+		this.lemma = lemma;
+		this.POS = pos;
+		this.head = head;
+		this.label = label;
 	}
 	
 	public int getSentenceId() {
-		return sentenceIndex;
+		return this.sentenceIndex;
 	}
 	
 	public int getId() {
-		return id;
+		return this.id;
 	}
 	
 	public String getWord() {
-		return word;
+		return this.word;
 	}
 	
 	public String getLemma() {
-		return lemma;
+		return this.lemma;
 	}
 	
 	public String getPOSTag() {
-		return POS;
+		return this.POS;
 	}
 	
 	public int getHead() {
-		return head;
+		return this.head;
 	}
 	
 	public String getLabel() {
-		return label;
+		return this.label;
 	}
 }

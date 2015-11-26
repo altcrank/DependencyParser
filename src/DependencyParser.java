@@ -107,7 +107,12 @@ public class DependencyParser {
 	}
 	
 	private void populateVocabulary(Set<String> words) {
+		//add ROOT
 		int wordId = 1;
+		this.vocabulary.put(1, "ROOT");
+		this.reverseVocabulary.put("ROOT", 1);
+		++wordId;
+		//add other words
 		Iterator<String> it = words.iterator();
 		while (it.hasNext()) {
 			String word = it.next();
@@ -115,9 +120,6 @@ public class DependencyParser {
 			this.reverseVocabulary.put(word, wordId);
 			++wordId;
 		}
-		//add ROOT
-		this.vocabulary.put(0, "ROOT");
-		this.reverseVocabulary.put("ROOT", 0);
 	}
 	
 	private void populatePOStags(Set<String> tags) {
@@ -220,12 +222,11 @@ public class DependencyParser {
 	
 	public void saveOracleDependencyTreeParse(List<Token> sentence, DependencyTree goldTree, PrintWriter writer) {
 		Configuration c = this.arcStandard.initialConfiguration(sentence);
-		List<ConfigurationState> configurationStates = new LinkedList<ConfigurationState>();
+		List<List<Integer>> parseFeatures = new LinkedList<List<Integer>>();
 		List<String> transitions = new LinkedList<String>();
 		while (!this.arcStandard.isTerminal(c)) {
-			//TODO get state and transition and save in a file to use for training
-			ConfigurationState state = this.extractConfigurationState(c);
-			configurationStates.add(state);
+			List<Integer> features = this.getFeatures(c);
+			parseFeatures.add(features);
 			String transition = this.arcStandard.getOracle(c, goldTree);
 			transitions.add(transition);
 			this.arcStandard.apply(c, transition);
@@ -234,26 +235,30 @@ public class DependencyParser {
 		predictedTree.sort();
 		boolean equal = goldTree.equals(predictedTree);
 		if (equal) {
-			Iterator<ConfigurationState> csIt = configurationStates.iterator();
+			Iterator<List<Integer>> featIt = parseFeatures.iterator();
 			Iterator<String> trIt = transitions.iterator();
-			while (csIt.hasNext() && trIt.hasNext()) {
-				ConfigurationState cs = csIt.next();
+			while (featIt.hasNext() && trIt.hasNext()) {
+				List<Integer> features = featIt.next();
 				int transitionId = this.arcStandard.getTransitionId(trIt.next());
-				writer.println(cs.toString() + transitionId);
+				String featureString = "";
+				for (int feature : features) {
+					featureString += feature + ",";
+				}
+				writer.println(featureString + transitionId);
 			}
 		} else {
 			System.out.println("false");
 		}
 	}
 	
-	private ConfigurationState extractConfigurationState(Configuration c) {
+	private List<Integer> getFeatures(Configuration c) {
 		ConfigurationState state = new ConfigurationState();
 		int stackIndex = 0;
 		while (stackIndex < 3) {
 			int sentenceIndex = c.getStack(stackIndex);
 			this.addWordToState(c, state, sentenceIndex, false);
 			if (stackIndex < 2) {
-				if (sentenceIndex <= 0) {
+				if (sentenceIndex < 0) {
 					state.addWords(Collections.nCopies(6, 0));
 					state.addPOStags(Collections.nCopies(6, 0));
 					state.addLabels(Collections.nCopies(6, 0));
@@ -270,7 +275,7 @@ public class DependencyParser {
 			this.addWordToState(c, state, sentenceIndex, false);
 			++bufferIndex;
 		}
-		return state;
+		return state.getFeatures();
 	}
 	
 	private void addChildren(Configuration c, int word, boolean left, ConfigurationState state) {
@@ -285,7 +290,7 @@ public class DependencyParser {
 			this.addWordToState(c, state, child, true);
 			if (childCount == 1) {
 				if (child < 0) {
-					this.addWordToState(c, state, 0, true);
+					this.addWordToState(c, state, -1, true);
 				} else {
 					int grandChild;
 					if (left) {
@@ -301,18 +306,92 @@ public class DependencyParser {
 	}
 	
 	private void addWordToState(Configuration c, ConfigurationState state, int word, boolean addLabel) {
-		if (word <= 0) {
+		if (word < 0) {
 			state.addWord(0);
 			state.addPOStag(0);
 			if (addLabel) {
 				state.addLabel(0);
 			}
 		} else {
-			state.addWord(this.reverseVocabulary.get(c.getWord(word)));
-			state.addPOStag(this.reverseTags.get(c.getPOS(word)));
-			if (addLabel) {
-				state.addLabel(this.reverseLabels.get(c.getLabel(word)));
+			Integer wordId = this.reverseVocabulary.get(c.getWord(word));
+			if (null != wordId) {
+				state.addWord(wordId);
+			} else {
+				state.addWord(0);
 			}
+			Integer tagId = this.reverseTags.get(c.getPOS(word));
+			if (null != tagId) {
+				state.addPOStag(tagId);
+			} else {
+				state.addPOStag(0);
+			}
+			if (addLabel) {
+				Integer labelId = this.reverseLabels.get(c.getLabel(word));
+				if (null != labelId) {
+					state.addLabel(labelId);
+				} else {
+					state.addLabel(0);
+				}
+			}
+		}
+	}
+	
+	private class ConfigurationState {
+		private List<Integer> words;
+		private List<Integer> postags;
+		private List<Integer> labels;
+		
+		public ConfigurationState() {
+			this.words = new LinkedList<Integer>();
+			this.postags = new LinkedList<Integer>();
+			this.labels = new LinkedList<Integer>();
+		}
+		
+		public void addWord(int word) {
+			this.words.add(word);
+		}
+		
+		public void addWords(List<Integer> words) {
+			this.words.addAll(words);
+		}
+		
+		public void addPOStag(int postag) {
+			this.postags.add(postag);
+		}
+		
+		public void addPOStags(List<Integer> postags) {
+			this.postags.addAll(postags);
+		}
+		
+		public void addLabel(int label) {
+			this.labels.add(label);
+		}
+		
+		public void addLabels(List<Integer> labels) {
+			this.labels.addAll(labels);
+		}
+		
+		public List<Integer> getFeatures() {
+			List<Integer> features = new LinkedList<Integer>();
+			features.addAll(this.words);
+			features.addAll(this.postags);
+			features.addAll(this.labels);
+			return features;
+		}
+		
+		@Override
+		public String toString() {
+			String result = "";
+			for (int word : this.words) {
+				result += String.valueOf(word) + ",";
+			}
+			for (int postag : this.postags) {
+				result += String.valueOf(postag) + ",";
+			}
+			for (int label : this.labels) {
+				result += String.valueOf(label) + ",";
+			}
+			return result;
 		}
 	}
 	

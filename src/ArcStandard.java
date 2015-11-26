@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 public class ArcStandard {
@@ -96,8 +97,9 @@ public class ArcStandard {
 			if (bufferSize > 0) {
 				return this.shift;
 			}
-			//end of sentence just attach root.
-			return this.right + this.rootLabel;
+			//end of sentence just pop "ROOT".
+//			return this.right + this.rootLabel;
+			return null;
 		}
 		//enough for an arc
 		int top = c.getStack(0);
@@ -133,10 +135,13 @@ public class ArcStandard {
 	}
 	
 	public Configuration initialConfiguration(List<Token> sentence) {
-		return new Configuration(sentence);
+		List<Token> modifiedSentence = new LinkedList<Token>();
+		modifiedSentence.add(new Token(0, 1, "ROOT", "ROOT", "ROOT", -1, ""));
+		modifiedSentence.addAll(sentence);
+		return new Configuration(modifiedSentence);
 	}
 	
 	public boolean isTerminal(Configuration c) {
-		return c.getStackSize() == 0 && c.getBufferSize() == 0;
+		return c.getStackSize() == 1 && c.getBufferSize() == 0;
 	}
 }

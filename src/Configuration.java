@@ -16,8 +16,14 @@ public class Configuration {
 		this.buffer = new LinkedList<Integer>();
 		this.arcs = new DependencyTree();
 		
-		for (Token token : sentence) {
-			buffer.add(token.getSentenceId());
+		this.stack.add(this.sentence.get(0).getSentenceId());
+		boolean skipRoot = true;//skip first word since it is root
+		for (Token token : this.sentence) {
+			if (skipRoot) {
+				skipRoot = false;
+				continue;
+			}
+			this.buffer.add(token.getSentenceId());
 		}
 	}
 	
@@ -44,21 +50,12 @@ public class Configuration {
 		return this.buffer.size();
 	}
 	
-	/**
-	  * @param k - word index (zero is root node, actual word index begins at 1)
-	  */
 	public int getHead(int k) {
-		if (0 == k) {
-			return -1;
-		}
-		return this.sentence.get(k - 1).getHead();
+		return this.sentence.get(k).getHead();
 	}
 
 	public String getLabel(int k) {
-		if (0 == k) {
-			return "";
-		}
-		return this.sentence.get(k - 1).getLabel();
+		return this.sentence.get(k).getLabel();
 	}
 
 	public int getLeftChild(int k, int cnt) {
@@ -79,10 +76,7 @@ public class Configuration {
 	}
 
 	public String getPOS(int k) {
-		if (0 == k) {
-			return "ROOT";
-		}
-		return this.sentence.get(k - 1).getPOSTag();
+		return this.sentence.get(k).getPOSTag();
 	}
 	
 	public int getRightChild(int k, int cnt) {
@@ -118,10 +112,7 @@ public class Configuration {
 	}
 	
 	public String getWord(int k) {
-		if (0 == k) {
-			return "ROOT";
-		}
-		return this.sentence.get(k-1).getLemma();
+		return this.sentence.get(k).getLemma();
 	}
 	
 	public boolean hasOtherChild(int k, DependencyTree goldTree) {
