@@ -33,7 +33,7 @@ public class NeuralNetwork implements Serializable {
 	private double[][] softMaxWeights;
 	
 
-	private static final double convergenceThreshold = 0.01;
+	private static final double convergenceThreshold = 1;
 	private static double learningRate = 1;
 	private static final double regularizingPenalty = 0.000001;
 	

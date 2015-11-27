@@ -338,6 +338,9 @@ public class DependencyParser {
 		this.openFile(testFile);
 		while (this.hasNextSentence()) {
 			List<Token> parsedSentence = this.tokenizeNextSentence();
+			if (parsedSentence.isEmpty()) {
+				break;
+			}
 			++total;
 			
 			DependencyTree dTree = this.getSentenceDependencyTree(parsedSentence);
