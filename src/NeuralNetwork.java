@@ -146,10 +146,18 @@ public class NeuralNetwork implements Serializable {
 		int[] indices = MatrixOperations.initializeIndices(data.size());
 		int iterations = 0;
 		while (error > NeuralNetwork.convergenceThreshold) {
+			long start = System.currentTimeMillis();
+			System.out.println("Starting iteration " + iterations);
+			System.out.flush();
 			this.trainIteration(randomAccessData, indices);
+			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
+			System.out.flush();
+			start = System.currentTimeMillis();
 			error = this.computeError(data);
+			System.out.println("Error computation took: " + (System.currentTimeMillis() - start) + " milliseconds");
 			System.out.println("Error: " + error);
 			System.out.println("Iteration: " + iterations);
+			System.out.flush();
 			++iterations;
 		}
 	}

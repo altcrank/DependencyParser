@@ -39,7 +39,7 @@ public class MatrixOperations {
 		Random random = new Random();
 		double[] result = new double[size];
 		for (int i = 0; i < result.length; ++i) {
-			result[i] = MatrixOperations.scale(random.nextDouble(), -1, 1, lowerLimit, upperLimit);
+			result[i] = MatrixOperations.scale(random.nextDouble(), 0, 1, lowerLimit, upperLimit);
 		}
 		return result;
 	}

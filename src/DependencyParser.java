@@ -267,9 +267,10 @@ public class DependencyParser {
 				}
 				writer.println(featureString + transitionId);
 			}
-		} else {
-			System.out.println("false");
 		}
+//		else {
+//			System.out.println("false");
+//		}
 	}
 	
 	public void train(Path inputPath, Path modelFile) {
