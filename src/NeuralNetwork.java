@@ -3,6 +3,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -16,10 +17,15 @@ public class NeuralNetwork implements Serializable {
 	 */
 	private static final long serialVersionUID = 1L;
 	
+	/**
+	 * working weights
+	 */
 	private int wordInputsCount;
 	private int tagInputsCount;
 	private int labelInputsCount;
 	private int embeddingSize;
+	private int currentBatch;
+	
 	private double[][] wordEmbeddings;
 	private double[][] tagEmbeddings;
 	private double[][] labelEmbeddings;
@@ -32,11 +38,17 @@ public class NeuralNetwork implements Serializable {
 	
 	private double[][] softMaxWeights;
 	
-
-	private static final double convergenceThreshold = 1;
-	private static double learningRate = 1;
+	/**
+	 * hyperparams
+	 */
+	private static final double convergenceThreshold = 95;
+	private static double learningRate = 0.001;
 	private static final double regularizingPenalty = 0.000001;
+	private static final int batchSize = 30;
 	
+	/**
+	 * accumulated squared gradients for AdaGrad (Adaptive Gradient)
+	 */
 	private double[][] wordEmbeddingsGrad;
 	private double[][] tagEmbeddingsGrad;
 	private double[][] labelEmbeddingsGrad;
@@ -49,6 +61,23 @@ public class NeuralNetwork implements Serializable {
 	
 	private double[][] softMaxWeightsGrad;
 	
+	/**
+	 * accumulated gradients to do in one batch
+	 */
+	private double[][] wordEmbeddingsBatch;
+	private double[][] tagEmbeddingsBatch;
+	private double[][] labelEmbeddingsBatch;
+	
+	private double[][] wordWeightsBatch;
+	private double[][] tagWeightsBatch;
+	private double[][] labelWeightsBatch;
+	
+	private double[] biasesBatch;
+	
+	private double[][] softMaxWeightsBatch;
+	
+	
+	
 	public NeuralNetwork(int wordInputsCount, int tagInputsCount, int labelInputsCount,
 			int vocabularySize, int tagsCount, int labelsCount,
 			int hiddens, int transitionsCount, int embeddingSize) {
@@ -56,6 +85,7 @@ public class NeuralNetwork implements Serializable {
 		this.tagInputsCount = tagInputsCount;
 		this.labelInputsCount = labelInputsCount;
 		this.embeddingSize = embeddingSize;
+		this.currentBatch = 0;
 		
 		this.wordEmbeddings = MatrixOperations.randomInitialize(this.embeddingSize, vocabularySize, -0.01, 0.01);
 		this.tagEmbeddings = MatrixOperations.randomInitialize(this.embeddingSize, tagsCount, -0.01, 0.01);
@@ -80,6 +110,18 @@ public class NeuralNetwork implements Serializable {
 		this.biasesGrad = new double[hiddens];
 		
 		this.softMaxWeightsGrad = new double[transitionsCount][hiddens];
+		
+		this.wordEmbeddingsBatch = new double[this.embeddingSize][vocabularySize];
+		this.tagEmbeddingsBatch = new double[this.embeddingSize][tagsCount];
+		this.labelEmbeddingsBatch = new double[this.embeddingSize][labelsCount];
+		
+		this.wordWeightsBatch = new double[hiddens][this.embeddingSize*this.wordInputsCount];
+		this.tagWeightsBatch = new double[hiddens][this.embeddingSize*this.tagInputsCount];
+		this.labelWeightsBatch = new double[hiddens][this.embeddingSize*this.labelInputsCount];
+		
+		this.biasesBatch = new double[hiddens];
+		
+		this.softMaxWeightsBatch = new double[transitionsCount][hiddens];
 		
 		this.printNN();
 	}
@@ -140,12 +182,12 @@ public class NeuralNetwork implements Serializable {
 		return new TrainingExample(wordInputs, tagInputs, labelInputs, output);
 	}
 
-	public void train(List<TrainingExample> data) {
-		double error = Double.POSITIVE_INFINITY;
+	private void train(List<TrainingExample> data) {
+		double correct = Double.NEGATIVE_INFINITY;
 		TrainingExample[] randomAccessData = data.toArray(new TrainingExample[0]);
 		int[] indices = MatrixOperations.initializeIndices(data.size());
-		int iterations = 0;
-		while (error > NeuralNetwork.convergenceThreshold) {
+		int iterations = 1;
+		while (correct < NeuralNetwork.convergenceThreshold) {
 			long start = System.currentTimeMillis();
 			System.out.println("Starting iteration " + iterations);
 			System.out.flush();
@@ -153,9 +195,9 @@ public class NeuralNetwork implements Serializable {
 			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
 			System.out.flush();
 			start = System.currentTimeMillis();
-			error = this.computeError(data);
-			System.out.println("Error computation took: " + (System.currentTimeMillis() - start) + " milliseconds");
-			System.out.println("Error: " + error);
+			correct = this.countCorrect(data);
+			System.out.println("Counting correct took: " + (System.currentTimeMillis() - start) + " milliseconds");
+			System.out.println("Correct: " + correct);
 			System.out.println("Iteration: " + iterations);
 			System.out.flush();
 			++iterations;
@@ -233,22 +275,22 @@ public class NeuralNetwork implements Serializable {
 		}
 	}
 	
-	private double computeError(List<TrainingExample> data) {
+	private double countCorrect(List<TrainingExample> data) {
 		//compute Sum of Squared Errors (SSE) for data
 		Iterator<TrainingExample> dataIt = data.iterator();
-		int errors = 0;
+		int correct = 0;
 		while (dataIt.hasNext()) {
 			TrainingExample example = dataIt.next();
 			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
 //			System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
-			if (transition != example.getOutput()) {
-				++errors;
+			if (transition == example.getOutput()) {
+				++correct;
 			}
 		}
 		//return percentage of errors
-		System.out.println("Errors: " + errors);
+		System.out.println("Correct: " + correct);
 		System.out.println("Total: " + data.size());
-		return (double) (errors * 100) / (double) data.size();
+		return (double) (correct * 100) / (double) data.size();
 	}
 	
 	private void updateWeights(TrainingExample example) {
@@ -263,51 +305,93 @@ public class NeuralNetwork implements Serializable {
 		double[] hiddenActivations = MatrixOperations.powComponentWise(hiddenActivationsBase, 3);
 		//compute output (they are already logged)
 	    double[] loggedOutputs = this.computeOutputs(hiddenActivations);
+	    
+//	    System.out.println("Outputs:");
+//	    this.printArray(loggedOutputs);
+	    
+	    //compute derivatives for SoftMax layer
 	    //compute normalizing constant (sum of outputs)
 	    double normalizingConstant = this.computeNormalizingConstant(loggedOutputs);
 	    //compute derivatives (use regularizing penalty)
 	    double[] outputDerivatives = MatrixOperations.multiply(loggedOutputs, 1/normalizingConstant);
 	    outputDerivatives[example.getOutput()] -= 1;
 	    double[][] softMaxWeightsDerivatives = MatrixOperations.outerProduct(outputDerivatives, hiddenActivations);
-	    double[][] softMaxPenalty = MatrixOperations.multiply(this.softMaxWeights, NeuralNetwork.regularizingPenalty);
-	    MatrixOperations.addInline(softMaxWeightsDerivatives, softMaxPenalty);
+	    MatrixOperations.addInline(this.softMaxWeightsBatch, softMaxWeightsDerivatives);
 	    
+	    //compute derivatives for weights layer
 	    double[] hiddenDerivatives = MatrixOperations.multiply(MatrixOperations.transpose(this.softMaxWeights), outputDerivatives);
 	    double[] hiddenActivationDerivatives = MatrixOperations.powComponentWise(hiddenActivationsBase, 2);
 	    MatrixOperations.multiplyInline(hiddenActivationDerivatives, 3);
 	    
+	    //compute bias derivatives as part of weights layer
 	    double[] biasDerivatives = MatrixOperations.multiplyComponentWise(hiddenDerivatives, hiddenActivationDerivatives);
+	    MatrixOperations.addInline(this.biasesBatch, biasDerivatives);
 	    
-	    double[][] wordWeightsDerivatives = this.computeWeightsDerivatives(this.wordWeights, biasDerivatives, inputWordEmbeddingsVector);
-	    double[][] tagsWeightsDerivatives = this.computeWeightsDerivatives(this.tagWeights, biasDerivatives, inputTagsEmbeddingsVector);
-	    double[][] labelWeightsDerivatives = this.computeWeightsDerivatives(this.labelWeights, biasDerivatives, inputLabelEmbeddingsVector);
+	    //use bias derivatives to compute the rest of the derivatives for weights layer
+	    double[][] wordWeightsDerivatives = MatrixOperations.outerProduct(biasDerivatives, inputWordEmbeddingsVector);
+	    double[][] tagsWeightsDerivatives = MatrixOperations.outerProduct(biasDerivatives, inputTagsEmbeddingsVector);
+	    double[][] labelWeightsDerivatives = MatrixOperations.outerProduct(biasDerivatives, inputLabelEmbeddingsVector);
+	    MatrixOperations.addInline(this.wordWeightsBatch, wordWeightsDerivatives);
+	    MatrixOperations.addInline(this.tagWeightsBatch, tagsWeightsDerivatives);
+	    MatrixOperations.addInline(this.labelWeightsBatch, labelWeightsDerivatives);
 	    
-	    double[] biasPenalty = MatrixOperations.multiply(this.biases, NeuralNetwork.regularizingPenalty);
-	    MatrixOperations.addInline(biasDerivatives, biasPenalty);
-	    
+	    //compute embeddings derivatives
 	    double[] commonMultipleVector = MatrixOperations.multiplyComponentWise(hiddenDerivatives, hiddenActivationDerivatives);
 	    double[] wordEmbeddingsDerivatives = MatrixOperations.multiply(MatrixOperations.transpose(this.wordWeights), commonMultipleVector);
 	    double[] tagEmbeddingsDerivatives = MatrixOperations.multiply(MatrixOperations.transpose(this.tagWeights), commonMultipleVector);
 	    double[] labelEmbeddingsDerivatives = MatrixOperations.multiply(MatrixOperations.transpose(this.labelWeights), commonMultipleVector);
+	    this.addEmbeddingsBatch(this.wordEmbeddingsBatch, wordEmbeddingsDerivatives, example.getWordInputs());
+	    this.addEmbeddingsBatch(this.tagEmbeddingsBatch, tagEmbeddingsDerivatives, example.getTagInputs());
+	    this.addEmbeddingsBatch(this.labelEmbeddingsBatch, labelEmbeddingsDerivatives, example.getLabelInputs());
+	    
+	    //Just accumulated another set of derivatives to the batch
+	    ++this.currentBatch;
+	    if (NeuralNetwork.batchSize != this.currentBatch) {
+	    	return;
+	    }
+	    //else reset batch and continue to upgrading weights
+	    this.currentBatch = 0;
 		
+	    //penalize batch
+	    //penalize sofrMax
+	    double[][] softMaxPenalty = MatrixOperations.multiply(this.softMaxWeights, NeuralNetwork.regularizingPenalty);
+	    MatrixOperations.addInline(this.softMaxWeightsBatch, softMaxPenalty);
+	    //penalize weights layer
+	    double[][] wordWeightsPenalty = MatrixOperations.multiply(this.wordWeights, NeuralNetwork.regularizingPenalty);
+	    MatrixOperations.addInline(this.wordWeightsBatch, wordWeightsPenalty);
+	    double[][] tagWeightsPenalty = MatrixOperations.multiply(this.tagWeights, NeuralNetwork.regularizingPenalty);
+	    MatrixOperations.addInline(this.tagWeightsBatch, tagWeightsPenalty);
+	    double[][] labelWeightsPenalty = MatrixOperations.multiply(this.labelWeights, NeuralNetwork.regularizingPenalty);
+	    MatrixOperations.addInline(this.labelWeightsBatch, labelWeightsPenalty);
+	    //weights layer includes biases
+	    double[] biasesPenalty = MatrixOperations.multiply(this.biases, NeuralNetwork.regularizingPenalty);
+	    MatrixOperations.addInline(this.biasesBatch, biasesPenalty);
+	    //penalize embeddings BUT only the ones that were actually used during this batch!
+	    //their derivatives should be different from 0
+	    this.penalizeEmbeddings(this.wordEmbeddingsBatch, this.wordEmbeddings);
+	    this.penalizeEmbeddings(this.tagEmbeddingsBatch, this.tagEmbeddings);
+	    this.penalizeEmbeddings(this.labelEmbeddingsBatch, this.labelEmbeddings);
+	    
 	    //AdaGrad
-	    this.updateAdaGradWeights(this.softMaxWeightsGrad, softMaxWeightsDerivatives);
-	    this.updateAdaGradWeights(this.biasesGrad, biasDerivatives);
-	    this.updateAdaGradWeights(this.wordWeightsGrad, wordWeightsDerivatives);
-	    this.updateAdaGradWeights(this.tagWeightsGrad, tagsWeightsDerivatives);
-	    this.updateAdaGradWeights(this.labelWeightsGrad, labelWeightsDerivatives);
-	    this.updateAdaGradEmbeddings(this.wordEmbeddingsGrad, wordEmbeddingsDerivatives, example.getWordInputs());
-	    this.updateAdaGradEmbeddings(this.tagEmbeddingsGrad, tagEmbeddingsDerivatives, example.getTagInputs());
-	    this.updateAdaGradEmbeddings(this.labelEmbeddingsGrad, labelEmbeddingsDerivatives, example.getLabelInputs());
+	    this.updateAdaGradWeights(this.softMaxWeightsGrad, this.softMaxWeightsBatch);
+	    this.updateAdaGradWeights(this.biasesGrad, this.biasesBatch);
+	    this.updateAdaGradWeights(this.wordWeightsGrad, this.wordWeightsBatch);
+	    this.updateAdaGradWeights(this.tagWeightsGrad, this.tagWeightsBatch);
+	    this.updateAdaGradWeights(this.labelWeightsGrad, this.labelWeightsBatch);
+	    this.updateAdaGradWeights(this.wordEmbeddingsGrad, this.wordEmbeddingsBatch);
+	    this.updateAdaGradWeights(this.tagEmbeddingsGrad, this.tagEmbeddingsBatch);
+	    this.updateAdaGradWeights(this.labelEmbeddingsGrad, this.labelEmbeddingsBatch);
 	    //update weights
-	    this.updateSingleSetOfWeights(this.softMaxWeights, softMaxWeightsDerivatives, this.softMaxWeightsGrad);
-	    this.updateSingleSetOfWeights(this.biases, biasDerivatives, this.biasesGrad);
-	    this.updateSingleSetOfWeights(this.wordWeights, wordWeightsDerivatives, this.wordWeightsGrad);
-	    this.updateSingleSetOfWeights(this.tagWeights, tagsWeightsDerivatives, this.tagWeightsGrad);
-	    this.updateSingleSetOfWeights(this.labelWeights, labelWeightsDerivatives, this.labelWeightsGrad);
-	    this.updateEmbeddings(this.wordEmbeddings, wordEmbeddingsDerivatives, this.wordEmbeddingsGrad, example.getWordInputs());
-	    this.updateEmbeddings(this.tagEmbeddings, tagEmbeddingsDerivatives, this.tagEmbeddingsGrad, example.getTagInputs());
-	    this.updateEmbeddings(this.labelEmbeddings, labelEmbeddingsDerivatives, this.labelEmbeddingsGrad, example.getLabelInputs());
+	    this.updateSingleSetOfWeights(this.softMaxWeights, this.softMaxWeightsBatch, this.softMaxWeightsGrad);
+	    this.updateSingleSetOfWeights(this.biases, this.biasesBatch, this.biasesGrad);
+	    this.updateSingleSetOfWeights(this.wordWeights, this.wordWeightsBatch, this.wordWeightsGrad);
+	    this.updateSingleSetOfWeights(this.tagWeights, this.tagWeightsBatch, this.tagWeightsGrad);
+	    this.updateSingleSetOfWeights(this.labelWeights, this.labelWeightsBatch, this.labelWeightsGrad);
+	    this.updateSingleSetOfWeights(this.wordEmbeddings, this.wordEmbeddingsBatch, this.wordEmbeddingsGrad);
+	    this.updateSingleSetOfWeights(this.tagEmbeddings, this.tagEmbeddingsBatch, this.tagEmbeddingsGrad);
+	    this.updateSingleSetOfWeights(this.labelEmbeddings, this.labelEmbeddingsBatch, this.labelEmbeddingsGrad);
+	    
+	    this.resetBatchDerivatives();
 	}
 
 	private double computeNormalizingConstant(double[] loggedOutputs) {
@@ -320,11 +404,28 @@ public class NeuralNetwork implements Serializable {
 		return maxLoggedOutput + Math.log(sum);
 	}
 	
-	private double[][] computeWeightsDerivatives(double[][] weights, double[] biasDerivatives, double[] embeddingsVector) {
-		double[][] weightsDerivatives = MatrixOperations.outerProduct(biasDerivatives, embeddingsVector);
-	    double[][] weightsPenalty = MatrixOperations.multiply(weights, NeuralNetwork.regularizingPenalty);
-	    MatrixOperations.addInline(weightsDerivatives, weightsPenalty);
-	    return weightsDerivatives;
+	private void addEmbeddingsBatch(double[][] embeddingsBatch, double[] embeddings, int[] inputs) {
+		for (int i = 0; i < embeddings.length; ++i) {
+			int inputIndex = inputs[i / this.embeddingSize];
+			if (0 == inputIndex) {
+				i += this.embeddingSize - 1;
+				continue;
+			}
+			--inputIndex;
+			int embeddingCoordinate = i % this.embeddingSize;
+			embeddingsBatch[embeddingCoordinate][inputIndex] += embeddings[i];
+		}
+	}
+	
+	private void penalizeEmbeddings(double[][] embeddingsBatch, double[][] embeddings) {
+		for (int row = 0; row < embeddingsBatch.length; ++row) {
+			for (int col = 0; col < embeddingsBatch[0].length; ++col) {
+				if (0 == embeddingsBatch[row][col]) {
+					continue;
+				}//else
+				embeddingsBatch[row][col] += NeuralNetwork.regularizingPenalty * embeddings[row][col];
+			}
+		}
 	}
 		
 	private void updateAdaGradWeights(double[] weights, double[] weightsDerivatives) {
@@ -337,23 +438,12 @@ public class NeuralNetwork implements Serializable {
 		MatrixOperations.addInline(weights, weightsDerivativesSquared);
 	}
 	
-	private void updateAdaGradEmbeddings(double[][] embeddings, double[] embeddingDerivatives, int[] inputs) {
-		for (int i = 0; i < embeddingDerivatives.length; ++i) {
-			int inputIndex = inputs[i / this.embeddingSize];
-			if (0 == inputIndex) {
-				i += this.embeddingSize -1;
-				continue;
-			}
-			--inputIndex;
-			int embeddingCoordinate = i % this.embeddingSize;
-			double penalizedDerivative = embeddingDerivatives[i] + NeuralNetwork.regularizingPenalty * embeddings[embeddingCoordinate][inputIndex];
-			embeddings[embeddingCoordinate][inputIndex] += penalizedDerivative * penalizedDerivative;
-		}
-	}
-
 	private void updateSingleSetOfWeights(double[] weights, double[] weightsDerivatives, double[] weightsGrad) {
 		MatrixOperations.multiplyInline(weightsDerivatives, NeuralNetwork.learningRate);
 		for (int i = 0; i < weightsDerivatives.length; ++i) {
+			if (0 == weightsGrad[i]) {
+				continue;
+			}//else
 			weightsDerivatives[i] /= Math.sqrt(weightsGrad[i]);
 		}
 		MatrixOperations.subtractInline(weights, weightsDerivatives);
@@ -363,24 +453,33 @@ public class NeuralNetwork implements Serializable {
 		MatrixOperations.multiplyInline(weightsDerivatives, NeuralNetwork.learningRate);
 		for (int row = 0; row < weightsDerivatives.length; ++row) {
 			for (int col = 0; col < weightsDerivatives[0].length; ++col) {
-				weightsDerivatives[row][col] /= Math.sqrt(weightsGrad[row][col]);
+				double grad = weightsGrad[row][col];
+				if (0 == grad) {
+					continue;
+				}//else
+				weightsDerivatives[row][col] /= Math.sqrt(grad);
 			}
 		}
 		MatrixOperations.subtractInline(weights, weightsDerivatives);
 	}
+	
+	private void resetBatchDerivatives() {
+		this.setToZeros(this.wordEmbeddingsGrad);
+		this.setToZeros(this.tagEmbeddingsGrad);
+		this.setToZeros(this.labelEmbeddingsGrad);
 
-	private void updateEmbeddings(double[][] embeddings, double[] embeddingDerivatives, double[][] embeddingsGrad, int[] inputs) {
-		for (int i = 0; i < embeddingDerivatives.length; ++i) {
-			int inputIndex = inputs[i / this.embeddingSize];
-			if (0 == inputIndex) {
-				i += this.embeddingSize -1;
-				continue;
-			}
-			--inputIndex;
-			int embeddingCoordinate = i % this.embeddingSize;
-			double penalizedDerivative = embeddingDerivatives[i] + NeuralNetwork.regularizingPenalty * embeddings[embeddingCoordinate][inputIndex];
-			double adaGradLearningRate = NeuralNetwork.learningRate / Math.sqrt(embeddingsGrad[embeddingCoordinate][inputIndex]);
-			embeddings[embeddingCoordinate][inputIndex] -= adaGradLearningRate * penalizedDerivative;
+		this.setToZeros(this.wordWeightsGrad);
+		this.setToZeros(this.tagWeightsGrad);
+		this.setToZeros(this.labelWeightsGrad);
+
+		Arrays.fill(this.biasesGrad, 0);
+
+		this.setToZeros(this.softMaxWeightsGrad);
+	}
+	
+	private void setToZeros(double[][] matrix) {
+		for (int row = 0; row < matrix.length; ++row) {
+			Arrays.fill(matrix[row], 0);
 		}
 	}
 	
