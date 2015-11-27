@@ -5,6 +5,10 @@ import java.util.*;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 
@@ -29,6 +33,7 @@ public class DependencyParser {
 										+ "transition";
 	
 	private ArcStandard arcStandard;
+	private NeuralNetwork network;
 	
 	private Map<Integer, String> vocabulary;
 	private Map<Integer, String> tags;
@@ -60,8 +65,8 @@ public class DependencyParser {
 		try {
 			reader = Files.newBufferedReader(this.filePath);
 		} catch (IOException e) {
-			System.err.println("Could not open conllu file: " + filePath);
-			System.out.println("Could not open conllu file: " + filePath.getFileName());
+			e.printStackTrace();
+			System.err.println("Could not open conllu file: " + filePath + " " + e.getMessage());
 		}
 	}
 	
@@ -80,7 +85,7 @@ public class DependencyParser {
 					break;
 				}
 			} catch (IOException e) {
-				System.err.println("Failed to read word");
+				System.err.println("Failed to read word" + " " + e.getMessage());
 				continue;
 			}
 			if (line.isEmpty() || line.charAt(0) == '#') {
@@ -97,11 +102,13 @@ public class DependencyParser {
 		this.populatePOStags(tags);
 		this.populateLabels(labels);
 		this.initializeArcStandard();
+		this.initializeNeuralNetwork();
+		
 		try {
 			reader.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
+			System.err.println(e.getMessage());
 		}
 		this.openFile(filePath);
 	}
@@ -172,6 +179,12 @@ public class DependencyParser {
 		this.arcStandard = new ArcStandard(this.labelsList);
 	}
 	
+	private void initializeNeuralNetwork() {
+		this.network = new NeuralNetwork(18, 18, 12,
+				this.vocabulary.size(), this.tags.size(), this.labels.size(),
+				200, 2*this.labels.size()+1, 50);
+	}
+	
 	public String getWord(int id) {
 		return this.vocabulary.get(id);
 	}
@@ -185,14 +198,14 @@ public class DependencyParser {
 		List<Token> words = new LinkedList<Token>();
 		while (line != null) {
 			try {
-				line = reader.readLine();
+				line = this.reader.readLine();
 				if (line == null) {
 					this.EOFreached = true;
 					break;
 				}
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
+				System.err.println(e.getMessage());
 				continue;
 			}
 			if (line.isEmpty() || line.charAt(0) == '#') {
@@ -200,6 +213,14 @@ public class DependencyParser {
 			}
 			String[] parts = line.split("\t");
 			words.add(new Token(parts, this.reverseVocabulary.get(parts[2])));
+		}
+		if (this.EOFreached) {
+			try {
+				reader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.err.println(e.getMessage());
+			}
 		}
 		return words;
 	}
@@ -251,7 +272,126 @@ public class DependencyParser {
 		}
 	}
 	
+	public void train(Path inputPath, Path modelFile) {
+		Path trainFile = FileSystems.getDefault().getPath("data", "trainingdata.csv");
+		this.generateTrainingData(inputPath, trainFile);
+		this.network.train(trainFile);
+		try {
+			OutputStream fileOut = Files.newOutputStream(modelFile);
+			ObjectOutputStream objOutStream = new ObjectOutputStream(fileOut);
+			objOutStream.writeObject(this.reverseVocabulary);
+			objOutStream.writeObject(this.reverseTags);
+			objOutStream.writeObject(this.reverseLabels);
+			objOutStream.writeObject(this.labelsList);
+			objOutStream.writeObject(this.network);
+			objOutStream.close();
+			fileOut.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Some step of serialization failed..." + " " + e.getMessage());
+		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	public void loadModel(Path modelFile) {
+		try {
+			InputStream fileIn = Files.newInputStream(modelFile);
+			ObjectInputStream objInStream = new ObjectInputStream(fileIn);
+			try {
+				this.reverseVocabulary = (HashMap<String, Integer>) objInStream.readObject();
+				this.reverseTags = (HashMap<String, Integer>) objInStream.readObject();
+				this.reverseLabels = (HashMap<String, Integer>) objInStream.readObject();
+				this.labelsList = (List<String>) objInStream.readObject();
+				this.network = (NeuralNetwork) objInStream.readObject();
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+				System.err.println("Failed to deserialize object" + " " + e.getMessage());
+			}
+			objInStream.close();
+			fileIn.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Some step of deserialization failed..." + " " + e.getMessage());
+		}
+		this.initializeArcStandard();
+	}
+	
+	public DependencyTree predict(List<Token> sentence) {
+		Configuration c = this.arcStandard.initialConfiguration(sentence);
+		while (!this.arcStandard.isTerminal(c)) {
+			ConfigurationState state = this.getConfigurationState(c);
+			int[] wordInputs = this.listToArray(state.getWords());
+			int[] tagInputs = this.listToArray(state.getTags());
+			int[] labelInputs = this.listToArray(state.getLabels());
+			int transitionId = this.network.chooseTransition(wordInputs, tagInputs, labelInputs);
+			String transition = this.arcStandard.getTransition(transitionId);
+			this.arcStandard.apply(c, transition);
+		}
+		DependencyTree predictedTree = c.getDependencyTree();
+		predictedTree.sort();
+		return predictedTree;
+	}
+	
+	public void test(Path testFile) {
+		int correct = 0;
+		int total = 0;
+		this.openFile(testFile);
+		while (this.hasNextSentence()) {
+			List<Token> parsedSentence = this.tokenizeNextSentence();
+			++total;
+			
+			DependencyTree dTree = this.getSentenceDependencyTree(parsedSentence);
+			dTree.sort();
+			DependencyTree predictedTree = this.predict(parsedSentence);
+			if (dTree.equals(predictedTree)) {
+				++correct;
+			} else {
+				System.out.println(dTree);
+				System.out.println();
+				System.out.println(predictedTree);
+				System.out.println();
+			}
+		}
+		double percentage = (double) correct * 100 / (double) total;
+		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
+	}
+	
+	private void generateTrainingData(Path inputFile, Path outputFile) {
+		this.openFile(inputFile);
+		this.initializeData();
+		PrintWriter writer = null;
+		try {
+			writer = new PrintWriter(outputFile.toFile(), "UTF-8");
+			writer.println(DependencyParser.header);
+			while (this.hasNextSentence()) {
+				List<Token> parsedSentence = this.tokenizeNextSentence();
+				DependencyTree dTree = this.getSentenceDependencyTree(parsedSentence);
+				dTree.sort();
+				this.saveOracleDependencyTreeParse(parsedSentence, dTree, writer);
+			}
+		} catch (FileNotFoundException | UnsupportedEncodingException e) {
+			System.err.println("Could not open file for writing training data!" + " " + e.getMessage());
+		} finally {
+			if (writer != null) {
+				writer.close();
+			}
+		}
+	}
+	
+	private int[] listToArray(List<Integer> list) {
+		int[] array = new int[list.size()];
+		int index = -1;
+		for (int number : list) {
+			array[++index] = number;
+		}
+		return array;
+	}
+	
 	private List<Integer> getFeatures(Configuration c) {
+		return this.getConfigurationState(c).getFeatures();
+	}
+	
+	private ConfigurationState getConfigurationState(Configuration c) {
 		ConfigurationState state = new ConfigurationState();
 		int stackIndex = 0;
 		while (stackIndex < 3) {
@@ -275,7 +415,7 @@ public class DependencyParser {
 			this.addWordToState(c, state, sentenceIndex, false);
 			++bufferIndex;
 		}
-		return state.getFeatures();
+		return state;
 	}
 	
 	private void addChildren(Configuration c, int word, boolean left, ConfigurationState state) {
@@ -379,6 +519,18 @@ public class DependencyParser {
 			return features;
 		}
 		
+		public List<Integer> getWords() {
+			return this.words;
+		}
+		
+		public List<Integer> getTags() {
+			return this.postags;
+		}
+		
+		public List<Integer> getLabels() {
+			return this.labels;
+		}
+		
 		@Override
 		public String toString() {
 			String result = "";
@@ -396,42 +548,25 @@ public class DependencyParser {
 	}
 	
 	public static void main(String[] args) {
-		int sentence = 0;
-		if (args.length > 0) {
-			sentence = Integer.parseInt(args[0]);
+		if (0 == args.length) {
+			return;
 		}
-		Path path = FileSystems.getDefault().getPath("data/UD_English", "en-ud-train.conllu");
+		
 		DependencyParser parser = new DependencyParser();
-		parser.openFile(path);
-		parser.initializeData();
-
-		int count = 0;
-		PrintWriter writer = null;
-		try {
-			writer = new PrintWriter("data/trainingdata.csv", "UTF-8");
-			writer.println(DependencyParser.header);
-			while (parser.hasNextSentence()) {
-				List<Token> parsedSentence = parser.tokenizeNextSentence();
-				++count;
-				if (sentence != 0) {
-					if (sentence < count) {
-						break;
-					}
-					if (sentence > count) {
-						continue;
-					}
-				}
-				DependencyTree dTree = parser.getSentenceDependencyTree(parsedSentence);
-				dTree.sort();
-				
-				parser.saveOracleDependencyTreeParse(parsedSentence, dTree, writer);
-			}
-		} catch (FileNotFoundException | UnsupportedEncodingException e) {
-			System.err.println("Could not open file for writing training data!");
-		} finally {
-			if (writer != null) {
-				writer.close();
-			}
+		Path modelFile;
+		
+		switch (args[0]) {
+		case "--train":
+			Path inputPath = FileSystems.getDefault().getPath("data/UD_English", args[1]);
+			modelFile = FileSystems.getDefault().getPath("data", "model.mem");
+			parser.train(inputPath, modelFile);
+			break;
+		case "--test":
+			Path testFile = FileSystems.getDefault().getPath("data/UD_English", args[1]);
+			modelFile = FileSystems.getDefault().getPath("data", "model.mem");
+			parser.loadModel(modelFile);
+			parser.test(testFile);
+			break;
 		}
 	}
 }

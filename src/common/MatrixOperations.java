@@ -15,7 +15,7 @@ public class MatrixOperations {
 	public static void shuffle(int[] vector) {
 		Random random = new Random();
 		//start from last element and work your way to the front
-		for (int i = vector.length-1; i > 0; ++i) {
+		for (int i = vector.length-1; i > 0; --i) {
 			//pick a random index smaller than the current one
 			int index = random.nextInt(i);
 			//swap elements in those positions
@@ -26,7 +26,7 @@ public class MatrixOperations {
 	}
 	
 	public static double[][] transpose(double[][] matrix) {
-		double[][] result = new double[matrix.length][matrix[0].length];
+		double[][] result = new double[matrix[0].length][matrix.length];
 		for (int row = 0; row < matrix.length; ++row) {
 			for (int col = 0; col < matrix[0].length; ++col) {
 				result[col][row] = matrix[row][col];
@@ -39,7 +39,7 @@ public class MatrixOperations {
 		Random random = new Random();
 		double[] result = new double[size];
 		for (int i = 0; i < result.length; ++i) {
-			result[i] = MatrixOperations.scale(random.nextDouble(), 0, 1, lowerLimit, upperLimit);
+			result[i] = MatrixOperations.scale(random.nextDouble(), -1, 1, lowerLimit, upperLimit);
 		}
 		return result;
 	}
@@ -48,8 +48,9 @@ public class MatrixOperations {
 		Random random = new Random();
 		double[][] result = new double[rows][cols];
 		for (int row = 0; row < result.length; ++row) {
-			for (int col = 0; col < result[0].length; ++col)
-			result[row][col] = MatrixOperations.scale(random.nextDouble(), 0, 1, lowerLimit, upperLimit);
+			for (int col = 0; col < result[0].length; ++col) {
+				result[row][col] = MatrixOperations.scale(random.nextDouble(), 0, 1, lowerLimit, upperLimit);
+			}
 		}
 		return result;
 	}
@@ -78,6 +79,15 @@ public class MatrixOperations {
 			result[i] = vector[i] * number;
 		}
 		return result;
+	}
+	
+	public static void addInline(double[] vector1, double[] vector2) {
+		if (vector1.length != vector2.length) {
+			throw new RuntimeException("MatrixOperations::addInline: vectors have different sizes");
+		}
+		for (int i = 0; i < vector1.length; ++i) {
+			vector1[i] += vector2[i];
+		}
 	}
 	
 	public static void addInline(double[][] matrix1, double[][] matrix2) {
@@ -168,7 +178,7 @@ public class MatrixOperations {
 		return result;
 	}
 
-	public static double[] pow(double[] vector, double power) {
+	public static double[] powComponentWise(double[] vector, double power) {
 		double[] result = new double[vector.length];
 		for (int i = 0; i < result.length; ++i) {
 			result[i] = Math.pow(vector[i], power);
@@ -176,7 +186,17 @@ public class MatrixOperations {
 		return result;
 	}
 	
-	public static double[] exp(double[] vector) {
+	public static double[][] powComponentWise(double[][] matrix, double power) {
+		double[][] result = new double[matrix.length][matrix[0].length];
+		for (int row = 0; row < result.length; ++row) {
+			for (int col = 0; col < result[0].length; ++col) {
+				result[row][col] = Math.pow(matrix[row][col], power);
+			}
+		}
+		return result;
+	}
+	
+	public static double[] expComponentWise(double[] vector) {
 		double[] result = new double[vector.length];
 		for (int i = 0; i < result.length; ++i) {
 			result[i] = Math.exp(vector[i]);
@@ -185,7 +205,7 @@ public class MatrixOperations {
 		return result;
 	}
 	
-	public static double[] log(double[] vector) {
+	public static double[] logComponentWise(double[] vector) {
 		double[] result = new double[vector.length];
 		for (int i = 0; i < vector.length; ++i) {
 			result[i] = Math.log(vector[i]);
@@ -232,6 +252,12 @@ public class MatrixOperations {
 	}
 	
 	private static double scale(double number, double oldMin, double oldMax, double newMin, double newMax) {
+		if (number < oldMin) {
+			return newMin;
+		}
+		if (number > oldMax) {
+			return newMax;
+		}
 		double t = (number - oldMin) / (oldMax - oldMin);
 		return (1 - t) * newMin + t * newMax;
 	}

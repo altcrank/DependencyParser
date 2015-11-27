@@ -20,7 +20,9 @@ public class ArcStandard {
 		this.transitions = new ArrayList<String>(2*labels.size() + 1);
 		this.transitions.add(this.shift);
 		for (String label : labels) {
-			this.transitions.add(left + label);
+			if (!label.equals(this.rootLabel)) {
+				this.transitions.add(left + label);
+			}
 			this.transitions.add(right + label);
 		}
 	}
@@ -134,9 +136,13 @@ public class ArcStandard {
 		return transitions.indexOf(t);
 	}
 	
+	public String getTransition(int transitionId) {
+		return transitions.get(transitionId);
+	}
+	
 	public Configuration initialConfiguration(List<Token> sentence) {
 		List<Token> modifiedSentence = new LinkedList<Token>();
-		modifiedSentence.add(new Token(0, 1, "ROOT", "ROOT", "ROOT", -1, ""));
+		modifiedSentence.add(new Token(0, 1, "ROOT", "ROOT", "", -1, ""));
 		modifiedSentence.addAll(sentence);
 		return new Configuration(modifiedSentence);
 	}
