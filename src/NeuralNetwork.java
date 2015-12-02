@@ -429,10 +429,12 @@ public class NeuralNetwork implements Serializable {
 	
 	private void updateSingleSetOfWeights(double[] weights, double[] weightsDerivatives, double[] weightsGrad) {
 		for (int i = 0; i < weightsDerivatives.length; ++i) {
-			if (0 == weightsGrad[i]) {
+			double grad = weightsGrad[i];
+			if (0 == grad) {
 				weightsDerivatives[i] *= NeuralNetwork.learningRate;
-			}//else
-			weightsDerivatives[i] *= NeuralNetwork.learningRate / Math.sqrt(weightsGrad[i]);
+			} else {
+				weightsDerivatives[i] *= NeuralNetwork.learningRate / Math.sqrt(grad);
+			}
 		}
 		MatrixOperations.subtractInline(weights, weightsDerivatives);
 	}
