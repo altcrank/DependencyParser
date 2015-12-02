@@ -337,6 +337,7 @@ public class DependencyParser {
 			long start = System.currentTimeMillis();
 			System.out.println("Starting iteration " + iterations);
 			System.out.flush();
+			this.network.resetAdaGrad();
 			this.network.trainIteration(randomAccessData, indices);
 			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
 			System.out.flush();

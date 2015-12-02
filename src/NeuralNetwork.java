@@ -37,7 +37,7 @@ public class NeuralNetwork implements Serializable {
 	 * hyperparams
 	 */
 	private static double learningRate = 0.001;
-	private static final double regularizingPenalty = 0.000000000001;
+	private static final double regularizingPenalty = 0.000001;
 	private static final int batchSize = 30;
 	
 	/**
@@ -152,7 +152,7 @@ public class NeuralNetwork implements Serializable {
 		MatrixOperations.shuffle(indices);
 		int examples = 0;
 		long start = System.currentTimeMillis();
-		System.out.println("Correct: " + this.countCorrect(data));
+//		System.out.println("Correct: " + this.countCorrect(data));
 		for (int i : indices) {
 			if (examples != 0 && 0 == examples % 10000) {
 				long end = System.currentTimeMillis();
@@ -161,7 +161,7 @@ public class NeuralNetwork implements Serializable {
 			this.printNN();
 			this.updateWeights(data[i]);
 			++examples;
-			System.out.println("Correct: " + this.countCorrect(data));
+//			System.out.println("Correct: " + this.countCorrect(data));
 		}
 	}
 	
@@ -183,7 +183,7 @@ public class NeuralNetwork implements Serializable {
 		return (double) (correct * 100) / (double) data.size();
 	}
 	
-	public double countCorrect(TrainingExample[] data) {
+	private double countCorrect(TrainingExample[] data) {
 		//compute Sum of Squared Errors (SSE) for data
 		int correct = 0;
 		for (TrainingExample example : data) {
@@ -335,7 +335,7 @@ public class NeuralNetwork implements Serializable {
 	    
 	    //Just accumulated another set of derivatives to the batch
 	    ++this.currentBatch;
-	    if (NeuralNetwork.batchSize < this.currentBatch) {
+	    if (NeuralNetwork.batchSize != this.currentBatch) {
 	    	return;
 	    }
 	    //else reset batch and continue to upgrading weights
@@ -430,7 +430,7 @@ public class NeuralNetwork implements Serializable {
 	private void updateSingleSetOfWeights(double[] weights, double[] weightsDerivatives, double[] weightsGrad) {
 		for (int i = 0; i < weightsDerivatives.length; ++i) {
 			if (0 == weightsGrad[i]) {
-				weightsDerivatives[i] *= 10 * NeuralNetwork.learningRate;
+				weightsDerivatives[i] *= NeuralNetwork.learningRate;
 			}//else
 			weightsDerivatives[i] *= NeuralNetwork.learningRate / Math.sqrt(weightsGrad[i]);
 		}
@@ -442,7 +442,7 @@ public class NeuralNetwork implements Serializable {
 			for (int col = 0; col < weightsDerivatives[0].length; ++col) {
 				double grad = weightsGrad[row][col];
 				if (0 == grad) {
-					weightsDerivatives[row][col] *= 10 * NeuralNetwork.learningRate;
+					weightsDerivatives[row][col] *= NeuralNetwork.learningRate;
 				} else {
 					weightsDerivatives[row][col] *= NeuralNetwork.learningRate / Math.sqrt(grad);
 				}
@@ -463,18 +463,20 @@ public class NeuralNetwork implements Serializable {
 		Arrays.fill(this.biasesBatch, 0);
 
 		this.setToZeros(this.softMaxWeightsBatch);
-		
-//		this.setToZeros(this.wordEmbeddingsGrad);
-//		this.setToZeros(this.tagEmbeddingsGrad);
-//		this.setToZeros(this.labelEmbeddingsGrad);
-//
-//		this.setToZeros(this.wordWeightsGrad);
-//		this.setToZeros(this.tagWeightsGrad);
-//		this.setToZeros(this.labelWeightsGrad);
-//
-//		Arrays.fill(this.biasesGrad, 0);
-//
-//		this.setToZeros(this.softMaxWeightsGrad);
+	}
+	
+	public void resetAdaGrad() {
+		this.setToZeros(this.wordEmbeddingsGrad);
+		this.setToZeros(this.tagEmbeddingsGrad);
+		this.setToZeros(this.labelEmbeddingsGrad);
+
+		this.setToZeros(this.wordWeightsGrad);
+		this.setToZeros(this.tagWeightsGrad);
+		this.setToZeros(this.labelWeightsGrad);
+
+		Arrays.fill(this.biasesGrad, 0);
+
+		this.setToZeros(this.softMaxWeightsGrad);
 	}
 	
 	private void setToZeros(double[][] matrix) {
