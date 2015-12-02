@@ -4,23 +4,19 @@ import java.util.List;
 
 public class ArcStandard {
 //	private List<String> labels;
-	private String rootLabel;
+	private static final String rootLabel = "root";
 	private List<String> transitions;
 	
-	private String shift;
-	private String left;
-	private String right;
+	private static final String shift = "shift";
+	private static final String left = "left";
+	private static final String right = "right";
 	
 	public ArcStandard(List<String> labels) {
 //		this.labels = labels;
-		this.rootLabel = "root";
-		this.shift = "shift";
-		this.left = "left";
-		this.right = "right";
 		this.transitions = new ArrayList<String>(2*labels.size() + 1);
-		this.transitions.add(this.shift);
+		this.transitions.add(ArcStandard.shift);
 		for (String label : labels) {
-			if (!label.equals(this.rootLabel)) {
+			if (!label.equals(ArcStandard.rootLabel)) {
 				this.transitions.add(left + label);
 			}
 			this.transitions.add(right + label);
@@ -32,15 +28,15 @@ public class ArcStandard {
 	 * @param t Transition
 	 */
 	public void apply(Configuration c, String t) {
-		if (t.equals(this.shift)) {
+		if (t.equals(ArcStandard.shift)) {
 			c.shift();
 			return;
 		}
 		//else
 		if (c.getStackSize() < 2) {
 			int dependent = c.getStack(0);
-			if (t.equals(this.right + this.rootLabel)) {
-				c.addArc(0, dependent, this.rootLabel);
+			if (t.equals(ArcStandard.right + ArcStandard.rootLabel)) {
+				c.addArc(0, dependent, ArcStandard.rootLabel);
 			}
 			else {
 				System.err.println("Fuck!");
@@ -51,14 +47,14 @@ public class ArcStandard {
 		int head = c.getStack(0);
 		int dependent = c.getStack(1);
 		String label;
-		boolean isLeft = t.startsWith(this.left);
+		boolean isLeft = t.startsWith(ArcStandard.left);
 		if (isLeft) {
-			label = t.substring(this.left.length());
+			label = t.substring(ArcStandard.left.length());
 		} else {
 			int temp = head;
 			head = dependent;
 			dependent = temp;
-			label = t.substring(this.right.length());
+			label = t.substring(ArcStandard.right.length());
 		}
 		c.addArc(head, dependent, label);
 		if (isLeft) {
@@ -66,6 +62,19 @@ public class ArcStandard {
 		} else {
 			c.removeTopStack();
 		}
+	}
+	
+	public boolean canApply(Configuration c, String t) {
+		//several special cases
+		//when buffer is empty and it predicted shift
+		//when ROOT will be head and the label is not leftroot
+		switch (t) {
+		case ArcStandard.shift:
+			return 0 != c.getBufferSize();
+		case (ArcStandard.right + ArcStandard.rootLabel):
+			return 0 == c.getStack(1);
+		}
+		return true;
 	}
 	
 /*
@@ -97,7 +106,7 @@ public class ArcStandard {
 		if (stackSize < 2) {
 			//not enough for an arc
 			if (bufferSize > 0) {
-				return this.shift;
+				return ArcStandard.shift;
 			}
 			//end of sentence just pop "ROOT".
 //			return this.right + this.rootLabel;
@@ -111,7 +120,7 @@ public class ArcStandard {
 		for (Arc arc : dTree) {
 			if (0 == leftArc.partialCompareTo(arc)) {
 				if (!c.hasOtherChild(leftArc.getDependentSentenceIndex(), dTree)) {
-					return this.left + arc.getLabel();
+					return ArcStandard.left + arc.getLabel();
 				}
 			}
 		}
@@ -120,13 +129,13 @@ public class ArcStandard {
 		for (Arc arc : dTree) {
 			if (0 == rightArc.partialCompareTo(arc)) {
 				if (!c.hasOtherChild(rightArc.getDependentSentenceIndex(), dTree)) {
-					return this.right + arc.getLabel();
+					return ArcStandard.right + arc.getLabel();
 				}
 			}
 		}
 		//If no arc - shift
 		if (bufferSize > 0) {
-			return this.shift;
+			return ArcStandard.shift;
 		}
 
 		return "Ooops! Ooops;";

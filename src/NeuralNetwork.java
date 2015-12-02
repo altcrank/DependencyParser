@@ -1,11 +1,6 @@
-import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 
 import common.MatrixOperations;
@@ -41,9 +36,8 @@ public class NeuralNetwork implements Serializable {
 	/**
 	 * hyperparams
 	 */
-	private static final double convergenceThreshold = 95;
 	private static double learningRate = 0.001;
-	private static final double regularizingPenalty = 0.000001;
+	private static final double regularizingPenalty = 0.000000000001;
 	private static final int batchSize = 30;
 	
 	/**
@@ -137,73 +131,94 @@ public class NeuralNetwork implements Serializable {
 		
 		double[] outputs = this.computeOutputs(hiddenActivations);
 		
-		return MatrixOperations.maxCoordinateIndex(outputs);
+		return MatrixOperations.argmax(outputs);
 	}
 	
-	public void train(Path trainFile) {
-		List<TrainingExample> examples = new LinkedList<TrainingExample>();
-		try {
-			BufferedReader reader = Files.newBufferedReader(trainFile);
-			//skip header
-			String line = reader.readLine();
-			while ((line = reader.readLine()) != null) {
-				TrainingExample example = this.getTrainingExample(line);
-				examples.add(example);
+	public int chooseSecondBestTransition(int[] wordInputs, int[] tagInputs, int[] labelInputs) {
+		double[] inputWordEmbeddingsVector = this.getWordEmbeddingsVector(wordInputs);
+		double[] inputTagsEmbeddingsVector = this.getTagEmbeddingsVector(tagInputs);
+		double[] inputLabelEmbeddingsVector = this.getLabelEmbeddingsVector(labelInputs);
+		
+		double[] hiddenActivations = this.computeHiddenActivations(inputWordEmbeddingsVector,
+																   inputTagsEmbeddingsVector,
+																   inputLabelEmbeddingsVector);
+		
+		double[] outputs = this.computeOutputs(hiddenActivations);
+		
+		return MatrixOperations.argmax2(outputs);
+	}
+	
+	public void trainIteration(TrainingExample[] data, int[] indices) {
+		MatrixOperations.shuffle(indices);
+		int examples = 0;
+		long start = System.currentTimeMillis();
+		System.out.println("Correct: " + this.countCorrect(data));
+		for (int i : indices) {
+			if (examples != 0 && 0 == examples % 10000) {
+				long end = System.currentTimeMillis();
+				System.out.println(examples + "/" + data.length + " examples for " + (end - start) + "ms.");
 			}
-			reader.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.err.println("Could not open conllu file: " + trainFile + " " + e.getMessage());
+			this.printNN();
+			this.updateWeights(data[i]);
+			++examples;
+			System.out.println("Correct: " + this.countCorrect(data));
 		}
-		if (!examples.isEmpty()) {
-			this.train(examples);
+	}
+	
+	public double countCorrect(List<TrainingExample> data) {
+		//compute Sum of Squared Errors (SSE) for data
+		Iterator<TrainingExample> dataIt = data.iterator();
+		int correct = 0;
+		while (dataIt.hasNext()) {
+			TrainingExample example = dataIt.next();
+			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
+//			System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
+			if (transition == example.getOutput()) {
+				++correct;
+			}
 		}
+		//return percentage of errors
+		System.out.println("Correct: " + correct);
+		System.out.println("Total: " + data.size());
+		return (double) (correct * 100) / (double) data.size();
+	}
+	
+	public double countCorrect(TrainingExample[] data) {
+		//compute Sum of Squared Errors (SSE) for data
+		int correct = 0;
+		for (TrainingExample example : data) {
+			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
+			System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
+			if (transition == example.getOutput()) {
+				++correct;
+			}
+		}
+		//return percentage of errors
+		System.out.println("Correct: " + correct);
+		System.out.println("Total: " + data.length);
+		return (double) (correct * 100) / (double) data.length;
+	}
+	
+	public double computeError(List<TrainingExample> data) {
+		//compute Sum of Squared Errors (SSE) for data
+		Iterator<TrainingExample> dataIt = data.iterator();
+		int wrong = 0;
+		while (dataIt.hasNext()) {
+			TrainingExample example = dataIt.next();
+			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
+			//					System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
+			if (transition != example.getOutput()) {
+				++wrong;
+			}
+		}
+		//return percentage of errors
+		System.out.println("Correct: " + wrong);
+		System.out.println("Total: " + data.size());
+		return (double) (wrong * 100) / (double) data.size();
 	}
 	
 	//private methods start from here
-	
-	private TrainingExample getTrainingExample(String line) {
-		String[] rawExample = line.split(",");
-		int[] wordInputs = new int[this.wordInputsCount];
-		for (int i = 0; i < this.wordInputsCount; ++i) {
-			wordInputs[i] = Integer.parseInt(rawExample[i]);
-		}
-		int[] tagInputs = new int[this.tagInputsCount];
-		int offset = this.wordInputsCount;
-		for (int i = 0; i < this.tagInputsCount; ++i) {
-			tagInputs[i] = Integer.parseInt(rawExample[offset + i]);
-		}
-		int[] labelInputs = new int[this.labelInputsCount];
-		offset += this.tagInputsCount;
-		for (int i = 0; i < this.labelInputsCount; ++i) {
-			labelInputs[i] = Integer.parseInt(rawExample[offset + i]);
-		}
-		int output = Integer.parseInt(rawExample[offset + this.labelInputsCount]);
-		return new TrainingExample(wordInputs, tagInputs, labelInputs, output);
-	}
 
-	private void train(List<TrainingExample> data) {
-		double correct = Double.NEGATIVE_INFINITY;
-		TrainingExample[] randomAccessData = data.toArray(new TrainingExample[0]);
-		int[] indices = MatrixOperations.initializeIndices(data.size());
-		int iterations = 1;
-		while (correct < NeuralNetwork.convergenceThreshold) {
-			long start = System.currentTimeMillis();
-			System.out.println("Starting iteration " + iterations);
-			System.out.flush();
-			this.trainIteration(randomAccessData, indices);
-			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
-			System.out.flush();
-			start = System.currentTimeMillis();
-			correct = this.countCorrect(data);
-			System.out.println("Counting correct took: " + (System.currentTimeMillis() - start) + " milliseconds");
-			System.out.println("Correct: " + correct);
-			System.out.println("Iteration: " + iterations);
-			System.out.flush();
-			++iterations;
-		}
-	}
-	
 	private double[] getWordEmbeddingsVector(int[] wordInputs) {
 		double[] inputWordEmbeddingsVector = new double[this.wordInputsCount*this.embeddingSize];
 		for (int i = 0; i < this.embeddingSize; ++i) {
@@ -267,32 +282,6 @@ public class NeuralNetwork implements Serializable {
 //		return MatrixOperations.exp(outputActivations);
 	}
 	
-	private void trainIteration(TrainingExample[] data, int[] indices) {
-		MatrixOperations.shuffle(indices);
-		for (int i : indices) {
-			this.printNN();
-			this.updateWeights(data[i]);
-		}
-	}
-	
-	private double countCorrect(List<TrainingExample> data) {
-		//compute Sum of Squared Errors (SSE) for data
-		Iterator<TrainingExample> dataIt = data.iterator();
-		int correct = 0;
-		while (dataIt.hasNext()) {
-			TrainingExample example = dataIt.next();
-			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
-//			System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
-			if (transition == example.getOutput()) {
-				++correct;
-			}
-		}
-		//return percentage of errors
-		System.out.println("Correct: " + correct);
-		System.out.println("Total: " + data.size());
-		return (double) (correct * 100) / (double) data.size();
-	}
-	
 	private void updateWeights(TrainingExample example) {
 		//compute projections
 		double[] inputWordEmbeddingsVector = this.getWordEmbeddingsVector(example.getWordInputs());
@@ -346,7 +335,7 @@ public class NeuralNetwork implements Serializable {
 	    
 	    //Just accumulated another set of derivatives to the batch
 	    ++this.currentBatch;
-	    if (NeuralNetwork.batchSize != this.currentBatch) {
+	    if (NeuralNetwork.batchSize < this.currentBatch) {
 	    	return;
 	    }
 	    //else reset batch and continue to upgrading weights
@@ -439,42 +428,53 @@ public class NeuralNetwork implements Serializable {
 	}
 	
 	private void updateSingleSetOfWeights(double[] weights, double[] weightsDerivatives, double[] weightsGrad) {
-		MatrixOperations.multiplyInline(weightsDerivatives, NeuralNetwork.learningRate);
 		for (int i = 0; i < weightsDerivatives.length; ++i) {
 			if (0 == weightsGrad[i]) {
-				continue;
+				weightsDerivatives[i] *= 10 * NeuralNetwork.learningRate;
 			}//else
-			weightsDerivatives[i] /= Math.sqrt(weightsGrad[i]);
+			weightsDerivatives[i] *= NeuralNetwork.learningRate / Math.sqrt(weightsGrad[i]);
 		}
 		MatrixOperations.subtractInline(weights, weightsDerivatives);
 	}
 	
 	private void updateSingleSetOfWeights(double[][] weights, double[][] weightsDerivatives, double[][] weightsGrad) {
-		MatrixOperations.multiplyInline(weightsDerivatives, NeuralNetwork.learningRate);
 		for (int row = 0; row < weightsDerivatives.length; ++row) {
 			for (int col = 0; col < weightsDerivatives[0].length; ++col) {
 				double grad = weightsGrad[row][col];
 				if (0 == grad) {
-					continue;
-				}//else
-				weightsDerivatives[row][col] /= Math.sqrt(grad);
+					weightsDerivatives[row][col] *= 10 * NeuralNetwork.learningRate;
+				} else {
+					weightsDerivatives[row][col] *= NeuralNetwork.learningRate / Math.sqrt(grad);
+				}
 			}
 		}
 		MatrixOperations.subtractInline(weights, weightsDerivatives);
 	}
 	
 	private void resetBatchDerivatives() {
-		this.setToZeros(this.wordEmbeddingsGrad);
-		this.setToZeros(this.tagEmbeddingsGrad);
-		this.setToZeros(this.labelEmbeddingsGrad);
+		this.setToZeros(this.wordEmbeddingsBatch);
+		this.setToZeros(this.tagEmbeddingsBatch);
+		this.setToZeros(this.labelEmbeddingsBatch);
 
-		this.setToZeros(this.wordWeightsGrad);
-		this.setToZeros(this.tagWeightsGrad);
-		this.setToZeros(this.labelWeightsGrad);
+		this.setToZeros(this.wordWeightsBatch);
+		this.setToZeros(this.tagWeightsBatch);
+		this.setToZeros(this.labelWeightsBatch);
 
-		Arrays.fill(this.biasesGrad, 0);
+		Arrays.fill(this.biasesBatch, 0);
 
-		this.setToZeros(this.softMaxWeightsGrad);
+		this.setToZeros(this.softMaxWeightsBatch);
+		
+//		this.setToZeros(this.wordEmbeddingsGrad);
+//		this.setToZeros(this.tagEmbeddingsGrad);
+//		this.setToZeros(this.labelEmbeddingsGrad);
+//
+//		this.setToZeros(this.wordWeightsGrad);
+//		this.setToZeros(this.tagWeightsGrad);
+//		this.setToZeros(this.labelWeightsGrad);
+//
+//		Arrays.fill(this.biasesGrad, 0);
+//
+//		this.setToZeros(this.softMaxWeightsGrad);
 	}
 	
 	private void setToZeros(double[][] matrix) {

@@ -22,6 +22,16 @@ public class DependencyTree extends LinkedList<Arc> {
 		return children;
 	}
 	
+	public boolean hasArc(Arc arc, boolean labeled) {
+		for (Arc a : this) {
+			int match = labeled ? a.compareTo(arc) : a.partialCompareTo(arc);
+			if (0 == match) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	@Override
 	public boolean equals(Object o) {
 		if (!(o instanceof DependencyTree)) {

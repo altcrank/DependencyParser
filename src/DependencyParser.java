@@ -2,7 +2,11 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+
+import common.MatrixOperations;
+
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,6 +38,9 @@ public class DependencyParser {
 	
 	private ArcStandard arcStandard;
 	private NeuralNetwork network;
+	private static final double convergenceThreshold = 95;
+	
+//	private NeuralNetworkJBLAS jnetwork;
 	
 	private Map<Integer, String> vocabulary;
 	private Map<Integer, String> tags;
@@ -183,6 +190,9 @@ public class DependencyParser {
 		this.network = new NeuralNetwork(18, 18, 12,
 				this.vocabulary.size(), this.tags.size(), this.labels.size(),
 				200, 2*this.labels.size()+1, 50);
+//		this.jnetwork = new NeuralNetworkJBLAS(18, 18, 12,
+//				this.vocabulary.size(), this.tags.size(), this.labels.size(),
+//				200, 2*this.labels.size()+1, 50);
 	}
 	
 	public String getWord(int id) {
@@ -274,9 +284,33 @@ public class DependencyParser {
 	}
 	
 	public void train(Path inputPath, Path modelFile) {
+		File mFile = new File(modelFile.toString());
+		if (mFile.exists()) {
+			this.loadModel(modelFile);
+		}
 		Path trainFile = FileSystems.getDefault().getPath("data", "trainingdata.csv");
 		this.generateTrainingData(inputPath, trainFile);
-		this.network.train(trainFile);
+		List<TrainingExample> examples = new LinkedList<TrainingExample>();
+		try {
+			BufferedReader reader = Files.newBufferedReader(trainFile);
+			//skip header
+			String line = reader.readLine();
+			while ((line = reader.readLine()) != null) {
+				TrainingExample example = this.getTrainingExample(line);
+				examples.add(example);
+			}
+			reader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Could not open conllu file: " + trainFile + " " + e.getMessage());
+		}
+		if (!examples.isEmpty()) {
+			this.train(examples, modelFile);
+		}
+		this.serialize(modelFile);
+	}
+	
+	private void serialize(Path modelFile) {
 		try {
 			OutputStream fileOut = Files.newOutputStream(modelFile);
 			ObjectOutputStream objOutStream = new ObjectOutputStream(fileOut);
@@ -285,12 +319,77 @@ public class DependencyParser {
 			objOutStream.writeObject(this.reverseLabels);
 			objOutStream.writeObject(this.labelsList);
 			objOutStream.writeObject(this.network);
+//			objOutStream.writeObject(this.jnetwork);
 			objOutStream.close();
 			fileOut.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.err.println("Some step of serialization failed..." + " " + e.getMessage());
 		}
+	}
+	
+	private void train(List<TrainingExample> data, Path modelFile) {
+		double correct = Double.NEGATIVE_INFINITY;
+		TrainingExample[] randomAccessData = data.toArray(new TrainingExample[0]);
+		int[] indices = MatrixOperations.initializeIndices(data.size());
+		int iterations = 1;
+		while (correct < DependencyParser.convergenceThreshold) {
+			long start = System.currentTimeMillis();
+			System.out.println("Starting iteration " + iterations);
+			System.out.flush();
+			this.network.trainIteration(randomAccessData, indices);
+			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
+			System.out.flush();
+			start = System.currentTimeMillis();
+			correct = this.network.countCorrect(data);
+			System.out.println("Counting correct took: " + (System.currentTimeMillis() - start) + " milliseconds");
+			System.out.println("Correct: " + correct);
+			System.out.println("Iteration: " + iterations);
+			System.out.flush();
+			this.backupModel(modelFile);
+			this.serialize(modelFile);
+			++iterations;
+		}
+	}
+	
+	private void backupModel(Path modelFile) {
+		File mFile = new File(modelFile.toString());
+		if (!mFile.exists()) {
+			return;
+		}
+		Path modelFileBakPath = modelFile.resolveSibling(modelFile.getFileName() + ".bak");
+		File modelFileBak = new File(modelFileBakPath.toString());
+		if (modelFileBak.exists()) {
+			modelFileBak.delete();
+		}
+		try {
+			Files.move(modelFile, modelFileBakPath);
+		} catch (IOException e) {
+			System.err.println("Faled to create backup model" + e.getMessage());
+			System.out.println(modelFile.toString());
+			System.out.println(modelFileBakPath.toString());
+			e.printStackTrace();
+		}
+	}
+	
+	private TrainingExample getTrainingExample(String line) {
+		String[] rawExample = line.split(",");
+		int[] wordInputs = new int[18];
+		for (int i = 0; i < 18; ++i) {
+			wordInputs[i] = Integer.parseInt(rawExample[i]);
+		}
+		int[] tagInputs = new int[18];
+		int offset = 18;
+		for (int i = 0; i < 18; ++i) {
+			tagInputs[i] = Integer.parseInt(rawExample[offset + i]);
+		}
+		int[] labelInputs = new int[12];
+		offset += 18;
+		for (int i = 0; i < 12; ++i) {
+			labelInputs[i] = Integer.parseInt(rawExample[offset + i]);
+		}
+		int output = Integer.parseInt(rawExample[offset + 12]);
+		return new TrainingExample(wordInputs, tagInputs, labelInputs, output);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -304,6 +403,7 @@ public class DependencyParser {
 				this.reverseLabels = (HashMap<String, Integer>) objInStream.readObject();
 				this.labelsList = (List<String>) objInStream.readObject();
 				this.network = (NeuralNetwork) objInStream.readObject();
+//				this.jnetwork = (NeuralNetworkJBLAS) objInStream.readObject();
 			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
 				System.err.println("Failed to deserialize object" + " " + e.getMessage());
@@ -326,6 +426,10 @@ public class DependencyParser {
 			int[] labelInputs = this.listToArray(state.getLabels());
 			int transitionId = this.network.chooseTransition(wordInputs, tagInputs, labelInputs);
 			String transition = this.arcStandard.getTransition(transitionId);
+			if (!this.arcStandard.canApply(c, transition)) {
+				transitionId = this.network.chooseSecondBestTransition(wordInputs, tagInputs, labelInputs);
+			}
+//			int transitionId = this.jnetwork.chooseTransition(wordInputs, tagInputs, labelInputs);
 			this.arcStandard.apply(c, transition);
 		}
 		DependencyTree predictedTree = c.getDependencyTree();
@@ -337,6 +441,8 @@ public class DependencyParser {
 		int correct = 0;
 		int total = 0;
 		this.openFile(testFile);
+		double uas = 0;
+		double las = 0;
 		while (this.hasNextSentence()) {
 			List<Token> parsedSentence = this.tokenizeNextSentence();
 			if (parsedSentence.isEmpty()) {
@@ -347,6 +453,8 @@ public class DependencyParser {
 			DependencyTree dTree = this.getSentenceDependencyTree(parsedSentence);
 			dTree.sort();
 			DependencyTree predictedTree = this.predict(parsedSentence);
+			uas += this.getAS(predictedTree, dTree, false);
+			las += this.getAS(predictedTree, dTree, true);
 			if (dTree.equals(predictedTree)) {
 				++correct;
 			} else {
@@ -358,6 +466,18 @@ public class DependencyParser {
 		}
 		double percentage = (double) correct * 100 / (double) total;
 		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
+		System.out.println("UAS: " + (uas / total) + "%");
+		System.out.println("LAS: " + (las / total) + "%");
+	}
+	
+	private double getAS(DependencyTree tree, DependencyTree goldTree, boolean labeled) {
+		int correct = 0;
+		for (Arc arc : tree) {
+			if (goldTree.hasArc(arc, labeled)) {
+				++correct;
+			}
+		}
+		return (double) 100 * correct / (double) goldTree.size();
 	}
 	
 	private void generateTrainingData(Path inputFile, Path outputFile) {

@@ -2,6 +2,8 @@ package common;
 
 import java.util.Random;
 
+import org.jblas.DoubleMatrix;
+
 public class MatrixOperations {
 	
 	public static int[] initializeIndices(int size) {
@@ -205,6 +207,16 @@ public class MatrixOperations {
 		return result;
 	}
 	
+	public static DoubleMatrix expComponentWise(DoubleMatrix vector) {
+		DoubleMatrix result = new DoubleMatrix(vector.getRows(), vector.getColumns());
+		for (int row = 0; row < result.getRows(); ++row) {
+			for (int col = 0; col < result.getColumns(); ++col) {
+				result.put(row, col, Math.exp(vector.get(row, col)));
+			}
+		}
+		return result;
+	}
+	
 	public static double[] logComponentWise(double[] vector) {
 		double[] result = new double[vector.length];
 		for (int i = 0; i < vector.length; ++i) {
@@ -239,7 +251,7 @@ public class MatrixOperations {
 		return result;
 	}
 	
-	public static int maxCoordinateIndex(double[] vector) {
+	public static int argmax(double[] vector) {
 		double max = Double.NEGATIVE_INFINITY;
 		int maxIndex = 0;
 		for (int index = 0; index < vector.length; ++index) {
@@ -249,6 +261,19 @@ public class MatrixOperations {
 			}
 		}
 		return maxIndex;
+	}
+	
+	public static int argmax2(double[] vector) {
+		int maxIndex = argmax(vector);
+		double max = Double.NEGATIVE_INFINITY;
+		int max2Index = -1;
+		for (int index = 0; index < vector.length; ++index) {
+			if (index != maxIndex && max < vector[index]) {
+				max = vector[index];
+				max2Index = index;
+			}
+		}
+		return max2Index;
 	}
 	
 	private static double scale(double number, double oldMin, double oldMax, double newMin, double newMax) {
