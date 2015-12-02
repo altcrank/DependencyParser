@@ -322,6 +322,7 @@ public class DependencyParser {
 //			objOutStream.writeObject(this.jnetwork);
 			objOutStream.close();
 			fileOut.close();
+			System.out.println("Serialized in " + modelFile.toString());
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.err.println("Some step of serialization failed..." + " " + e.getMessage());
@@ -337,7 +338,6 @@ public class DependencyParser {
 			long start = System.currentTimeMillis();
 			System.out.println("Starting iteration " + iterations);
 			System.out.flush();
-			this.network.resetAdaGrad();
 			this.network.trainIteration(randomAccessData, indices);
 			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
 			System.out.flush();
@@ -365,6 +365,7 @@ public class DependencyParser {
 		}
 		try {
 			Files.move(modelFile, modelFileBakPath);
+			System.out.println("Backed up in " + modelFileBakPath.toString());
 		} catch (IOException e) {
 			System.err.println("Faled to create backup model" + e.getMessage());
 			System.out.println(modelFile.toString());
@@ -405,6 +406,7 @@ public class DependencyParser {
 				this.labelsList = (List<String>) objInStream.readObject();
 				this.network = (NeuralNetwork) objInStream.readObject();
 //				this.jnetwork = (NeuralNetworkJBLAS) objInStream.readObject();
+				System.out.println("Loaded model from: " + modelFile.toString());
 			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
 				System.err.println("Failed to deserialize object" + " " + e.getMessage());

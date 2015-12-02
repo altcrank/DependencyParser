@@ -8,11 +8,6 @@ import common.MatrixOperations;
 public class NeuralNetwork implements Serializable {
 	
 	/**
-	 * Serializable requires it. This is the one added by default
-	 */
-	private static final long serialVersionUID = 1L;
-	
-	/**
 	 * working weights
 	 */
 	private int wordInputsCount;
@@ -32,13 +27,6 @@ public class NeuralNetwork implements Serializable {
 	private double[] biases;
 	
 	private double[][] softMaxWeights;
-	
-	/**
-	 * hyperparams
-	 */
-	private static double learningRate = 0.001;
-	private static final double regularizingPenalty = 0.000001;
-	private static final int batchSize = 30;
 	
 	/**
 	 * accumulated squared gradients for AdaGrad (Adaptive Gradient)
@@ -69,6 +57,18 @@ public class NeuralNetwork implements Serializable {
 	private double[] biasesBatch;
 	
 	private double[][] softMaxWeightsBatch;
+	
+	/**
+	 * Serializable requires it. This is the one added by default
+	 */
+	private static final long serialVersionUID = 1L;
+	
+	/**
+	 * hyperparams
+	 */
+	private static double learningRate = 0.01;
+	private static final double regularizingPenalty = 0.000001;
+	private static final int batchSize = 30;
 	
 	
 	
@@ -149,6 +149,8 @@ public class NeuralNetwork implements Serializable {
 	}
 	
 	public void trainIteration(TrainingExample[] data, int[] indices) {
+		this.resetAdaGrad();
+		this.resetBatchDerivatives();
 		MatrixOperations.shuffle(indices);
 		int examples = 0;
 		long start = System.currentTimeMillis();
@@ -467,7 +469,7 @@ public class NeuralNetwork implements Serializable {
 		this.setToZeros(this.softMaxWeightsBatch);
 	}
 	
-	public void resetAdaGrad() {
+	private void resetAdaGrad() {
 		this.setToZeros(this.wordEmbeddingsGrad);
 		this.setToZeros(this.tagEmbeddingsGrad);
 		this.setToZeros(this.labelEmbeddingsGrad);
