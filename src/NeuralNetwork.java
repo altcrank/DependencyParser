@@ -68,7 +68,7 @@ public class NeuralNetwork implements Serializable {
 	 */
 	private static double learningRate = 0.01;
 	private static final double regularizingPenalty = 0.000001;
-	private static final int batchSize = 30;
+	private static int batchSize = 100;
 	
 	
 	
@@ -120,7 +120,7 @@ public class NeuralNetwork implements Serializable {
 		this.printNN();
 	}
 	
-	public int chooseTransition(int[] wordInputs, int[] tagInputs, int[] labelInputs) {
+	public int chooseTransition(int[] wordInputs, int[] tagInputs, int[] labelInputs, int best) {
 		double[] inputWordEmbeddingsVector = this.getWordEmbeddingsVector(wordInputs);
 		double[] inputTagsEmbeddingsVector = this.getTagEmbeddingsVector(tagInputs);
 		double[] inputLabelEmbeddingsVector = this.getLabelEmbeddingsVector(labelInputs);
@@ -131,7 +131,30 @@ public class NeuralNetwork implements Serializable {
 		
 		double[] outputs = this.computeOutputs(hiddenActivations);
 		
-		return MatrixOperations.argmax(outputs);
+//		return MatrixOperations.argmax(outputs);
+		
+		double[] maxes = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
+		int[] indices = {0, 0, 0};
+		for (int index = 0; index < outputs.length; ++index) {
+			if (maxes[0] < outputs[index]) {
+				maxes[2] = maxes[1];
+				maxes[1] = maxes[0];
+				maxes[0] = outputs[index];
+				indices[2] = indices[1];
+				indices[1] = indices[0];
+				indices[0] = index;
+			} else if (maxes[1] < outputs[index]) {
+				maxes[2] = maxes[1];
+				indices[2] = indices[1];
+				maxes[1] = outputs[index];
+				indices[1] = index;
+			} else if (maxes[2] < outputs[index]) {
+				maxes[2] = outputs[index];
+				indices[2] = index;
+			}
+		}
+		return indices[best];
+//		return maxIndex;
 	}
 	
 	public int chooseSecondBestTransition(int[] wordInputs, int[] tagInputs, int[] labelInputs) {
@@ -154,6 +177,7 @@ public class NeuralNetwork implements Serializable {
 		MatrixOperations.shuffle(indices);
 		int examples = 0;
 		long start = System.currentTimeMillis();
+		NeuralNetwork.batchSize = data.length / 100;
 //		System.out.println("Correct: " + this.countCorrect(data));
 		for (int i : indices) {
 			if (examples != 0 && 0 == examples % 10000) {
@@ -173,7 +197,7 @@ public class NeuralNetwork implements Serializable {
 		int correct = 0;
 		while (dataIt.hasNext()) {
 			TrainingExample example = dataIt.next();
-			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
+			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs(), 0);
 //			System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
 			if (transition == example.getOutput()) {
 				++correct;
@@ -185,36 +209,20 @@ public class NeuralNetwork implements Serializable {
 		return (double) (correct * 100) / (double) data.size();
 	}
 	
-	private double countCorrect(TrainingExample[] data) {
-		//compute Sum of Squared Errors (SSE) for data
-		int correct = 0;
-		for (TrainingExample example : data) {
-			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
-			System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
-			if (transition == example.getOutput()) {
-				++correct;
-			}
-		}
-		//return percentage of errors
-		System.out.println("Correct: " + correct);
-		System.out.println("Total: " + data.length);
-		return (double) (correct * 100) / (double) data.length;
-	}
-	
 	public double computeError(List<TrainingExample> data) {
 		//compute Sum of Squared Errors (SSE) for data
 		Iterator<TrainingExample> dataIt = data.iterator();
 		int wrong = 0;
 		while (dataIt.hasNext()) {
 			TrainingExample example = dataIt.next();
-			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs());
+			int transition = this.chooseTransition(example.getWordInputs(), example.getTagInputs(), example.getLabelInputs(), 0);
 			//					System.out.println("Real: " + example.getOutput() + " Predicted: " + transition);
 			if (transition != example.getOutput()) {
 				++wrong;
 			}
 		}
 		//return percentage of errors
-		System.out.println("Correct: " + wrong);
+		System.out.println("Wrong: " + wrong);
 		System.out.println("Total: " + data.size());
 		return (double) (wrong * 100) / (double) data.size();
 	}

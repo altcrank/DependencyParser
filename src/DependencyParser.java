@@ -38,7 +38,7 @@ public class DependencyParser {
 	
 	private ArcStandard arcStandard;
 	private NeuralNetwork network;
-	private static final double convergenceThreshold = 95;
+	private static final double convergenceThreshold = 10;
 	
 //	private NeuralNetworkJBLAS jnetwork;
 	
@@ -60,7 +60,7 @@ public class DependencyParser {
 		this.tags = new HashMap<Integer, String>();
 		this.labels = new HashMap<Integer, String>();
 		//we want to know how many labels we have before we initialize this
-		this.labelsList = null;
+		this.labelsList = new LinkedList<String>();
 		this.reverseVocabulary = new HashMap<String, Integer>();
 		this.reverseTags = new HashMap<String, Integer>();
 		this.reverseLabels = new HashMap<String, Integer>();
@@ -75,6 +75,100 @@ public class DependencyParser {
 			e.printStackTrace();
 			System.err.println("Could not open conllu file: " + filePath + " " + e.getMessage());
 		}
+	}
+	
+	public void buildVocabulary(Path train, Path valid, Path test) {
+		this.collectData(train);
+		this.collectData(valid);
+		this.collectData(test);
+	}
+	
+	private void collectData(Path file) {
+		this.openFile(file);
+		//Tree sets because for some reason I though it might be nice
+		//if they are ordered alphabetically
+		Set<String> words = new TreeSet<String>();
+		Set<String> tags = new TreeSet<String>();
+		Set<String> labels = new TreeSet<String>();
+		String line = new String();
+		while (line != null) {
+			try {
+				line = this.reader.readLine();
+				if (line == null) {
+					this.EOFreached = true;
+					break;
+				}
+			} catch (IOException e) {
+				System.err.println("Failed to read word" + " " + e.getMessage());
+				continue;
+			}
+			if (line.isEmpty() || line.charAt(0) == '#') {
+				continue;
+			}
+			String[] parts = line.split("\t");
+			Token token = new Token(parts, 0);
+			words.add(token.getLemma());
+			tags.add(token.getPOSTag());
+			labels.add(token.getLabel());
+		}
+		
+		this.populateVocabulary(words);
+		this.populatePOStags(tags);
+		this.populateLabels(labels);
+	}
+	
+	public void serializeVocabulary(Path vocab) {
+		try {
+			OutputStream fileOut = Files.newOutputStream(vocab);
+			ObjectOutputStream objOutStream = new ObjectOutputStream(fileOut);
+			objOutStream.writeObject(this.reverseVocabulary);
+			objOutStream.writeObject(this.reverseTags);
+			objOutStream.writeObject(this.reverseLabels);
+			objOutStream.writeObject(this.labelsList);
+			objOutStream.close();
+			fileOut.close();
+			System.out.println("Serialized in " + vocab.toString());
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Some step of serialization failed..." + " " + e.getMessage());
+		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	public void deserializeVocabulary(Path vocab) {
+		try {
+			InputStream fileIn = Files.newInputStream(vocab);
+			ObjectInputStream objInStream = new ObjectInputStream(fileIn);
+			try {
+				this.reverseVocabulary = (HashMap<String, Integer>) objInStream.readObject();
+				this.reverseTags = (HashMap<String, Integer>) objInStream.readObject();
+				this.reverseLabels = (HashMap<String, Integer>) objInStream.readObject();
+				this.labelsList = (List<String>) objInStream.readObject();
+				System.out.println("Loaded model from: " + vocab.toString());
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+				System.err.println("Failed to deserialize object" + " " + e.getMessage());
+			}
+			objInStream.close();
+			fileIn.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Some step of deserialization failed..." + " " + e.getMessage());
+		}
+		this.completeParser();
+	}
+	
+	private void completeParser() {
+		for (Map.Entry<String, Integer> entry : this.reverseVocabulary.entrySet()) {
+			this.vocabulary.put(entry.getValue(), entry.getKey());
+		}
+		for (Map.Entry<String, Integer> entry : this.reverseTags.entrySet()) {
+			this.tags.put(entry.getValue(), entry.getKey());
+		}
+		for (Map.Entry<String, Integer> entry : this.reverseLabels.entrySet()) {
+			this.labels.put(entry.getValue(), entry.getKey());
+		}
+		this.initializeArcStandard();
 	}
 	
 	public void initializeData() {
@@ -120,50 +214,6 @@ public class DependencyParser {
 		this.openFile(filePath);
 	}
 	
-	private void populateVocabulary(Set<String> words) {
-		//add ROOT
-		int wordId = 1;
-		this.vocabulary.put(1, "ROOT");
-		this.reverseVocabulary.put("ROOT", 1);
-		++wordId;
-		//add other words
-		Iterator<String> it = words.iterator();
-		while (it.hasNext()) {
-			String word = it.next();
-			this.vocabulary.put(wordId, word);
-			this.reverseVocabulary.put(word, wordId);
-			++wordId;
-		}
-	}
-	
-	private void populatePOStags(Set<String> tags) {
-		this.tags = new HashMap<Integer, String>();
-		this.reverseTags = new HashMap<String, Integer>();
-		int tagId = 1;
-		Iterator<String> it = tags.iterator();
-		while (it.hasNext()) {
-			String tag = it.next();
-			this.tags.put(tagId, tag);
-			this.reverseTags.put(tag, tagId);
-			++tagId;
-		}
-	}
-	
-	private void populateLabels(Set<String> labels) {
-		this.labels = new HashMap<Integer, String>();
-		this.reverseLabels = new HashMap<String, Integer>();
-		this.labelsList = new ArrayList<String>(labels.size());
-		int labelId = 1;
-		Iterator<String> it = labels.iterator();
-		while (it.hasNext()) {
-			String label = it.next();
-			this.labels.put(labelId, label);
-			this.reverseLabels.put(label, labelId);
-			this.labelsList.add(label);
-			++labelId;
-		}
-	}
-	
 	public void printVocabulary() {
 		printMap(vocabulary);
 	}
@@ -180,19 +230,6 @@ public class DependencyParser {
 		for (Map.Entry<Integer, String> entry : map.entrySet()) {
 			System.out.println(entry.getKey().toString() + " " + entry.getValue());
 		}
-	}
-	
-	private void initializeArcStandard() {
-		this.arcStandard = new ArcStandard(this.labelsList);
-	}
-	
-	private void initializeNeuralNetwork() {
-		this.network = new NeuralNetwork(18, 18, 12,
-				this.vocabulary.size(), this.tags.size(), this.labels.size(),
-				200, 2*this.labels.size()+1, 50);
-//		this.jnetwork = new NeuralNetworkJBLAS(18, 18, 12,
-//				this.vocabulary.size(), this.tags.size(), this.labels.size(),
-//				200, 2*this.labels.size()+1, 50);
 	}
 	
 	public String getWord(int id) {
@@ -241,11 +278,8 @@ public class DependencyParser {
 			Token token = sentence.get(i);
 
 			int headIdx = token.getHead();
-//			int head = (0 == headIdx) ? headIdx : sentence.get(headIdx-1).getId();
 			int headSentenceIndex = (0 == headIdx) ? headIdx : sentence.get(headIdx - 1).getSentenceId();
-//			int dependent = token.getId();
 			int depSentenceIndex = token.getSentenceId();
-//			dTree.add(new Arc(head, headSentenceIndex, dependent, depSentenceIndex, token.getLabel()));
 			dTree.add(new Arc(headSentenceIndex, depSentenceIndex, token.getLabel()));
 		}
 		return dTree;
@@ -278,132 +312,13 @@ public class DependencyParser {
 				writer.println(featureString + transitionId);
 			}
 		}
-//		else {
-//			System.out.println("false");
-//		}
 	}
 	
-	public void train(Path inputPath, Path modelFile) {
-		File mFile = new File(modelFile.toString());
-		if (mFile.exists()) {
-			this.loadModel(modelFile);
-		}
-		Path trainFile = FileSystems.getDefault().getPath("data", "trainingdata.csv");
-		this.generateTrainingData(inputPath, trainFile);
-		List<TrainingExample> examples = new LinkedList<TrainingExample>();
-		try {
-			BufferedReader reader = Files.newBufferedReader(trainFile);
-			//skip header
-			String line = reader.readLine();
-			while ((line = reader.readLine()) != null) {
-				TrainingExample example = this.getTrainingExample(line);
-				examples.add(example);
-			}
-			reader.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.err.println("Could not open conllu file: " + trainFile + " " + e.getMessage());
-		}
-		if (!examples.isEmpty()) {
-			this.train(examples, modelFile);
-		}
-		this.serialize(modelFile);
-	}
-	
-	private void serialize(Path modelFile) {
-		try {
-			OutputStream fileOut = Files.newOutputStream(modelFile);
-			ObjectOutputStream objOutStream = new ObjectOutputStream(fileOut);
-			objOutStream.writeObject(this.reverseVocabulary);
-			objOutStream.writeObject(this.reverseTags);
-			objOutStream.writeObject(this.reverseLabels);
-			objOutStream.writeObject(this.labelsList);
-			objOutStream.writeObject(this.network);
-//			objOutStream.writeObject(this.jnetwork);
-			objOutStream.close();
-			fileOut.close();
-			System.out.println("Serialized in " + modelFile.toString());
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.err.println("Some step of serialization failed..." + " " + e.getMessage());
-		}
-	}
-	
-	private void train(List<TrainingExample> data, Path modelFile) {
-		double correct = Double.NEGATIVE_INFINITY;
-		TrainingExample[] randomAccessData = data.toArray(new TrainingExample[0]);
-		int[] indices = MatrixOperations.initializeIndices(data.size());
-		int iterations = 1;
-		while (correct < DependencyParser.convergenceThreshold) {
-			long start = System.currentTimeMillis();
-			System.out.println("Starting iteration " + iterations);
-			System.out.flush();
-			this.network.trainIteration(randomAccessData, indices);
-			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
-			System.out.flush();
-			start = System.currentTimeMillis();
-			correct = this.network.countCorrect(data);
-			System.out.println("Counting correct took: " + (System.currentTimeMillis() - start) + " milliseconds");
-			System.out.println("Correct: " + correct);
-			System.out.println("Iteration: " + iterations);
-			System.out.flush();
-			this.backupModel(modelFile);
-			this.serialize(modelFile);
-			++iterations;
-		}
-	}
-	
-	private void backupModel(Path modelFile) {
-		File mFile = new File(modelFile.toString());
-		if (!mFile.exists()) {
-			return;
-		}
-		Path modelFileBakPath = modelFile.resolveSibling(modelFile.getFileName() + ".bak");
-		File modelFileBak = new File(modelFileBakPath.toString());
-		if (modelFileBak.exists()) {
-			modelFileBak.delete();
-		}
-		try {
-			Files.move(modelFile, modelFileBakPath);
-			System.out.println("Backed up in " + modelFileBakPath.toString());
-		} catch (IOException e) {
-			System.err.println("Faled to create backup model" + e.getMessage());
-			System.out.println(modelFile.toString());
-			System.out.println(modelFileBakPath.toString());
-			e.printStackTrace();
-		}
-	}
-	
-	private TrainingExample getTrainingExample(String line) {
-		String[] rawExample = line.split(",");
-		int[] wordInputs = new int[18];
-		for (int i = 0; i < 18; ++i) {
-			wordInputs[i] = Integer.parseInt(rawExample[i]);
-		}
-		int[] tagInputs = new int[18];
-		int offset = 18;
-		for (int i = 0; i < 18; ++i) {
-			tagInputs[i] = Integer.parseInt(rawExample[offset + i]);
-		}
-		int[] labelInputs = new int[12];
-		offset += 18;
-		for (int i = 0; i < 12; ++i) {
-			labelInputs[i] = Integer.parseInt(rawExample[offset + i]);
-		}
-		int output = Integer.parseInt(rawExample[offset + 12]);
-		return new TrainingExample(wordInputs, tagInputs, labelInputs, output);
-	}
-	
-	@SuppressWarnings("unchecked")
 	public void loadModel(Path modelFile) {
 		try {
 			InputStream fileIn = Files.newInputStream(modelFile);
 			ObjectInputStream objInStream = new ObjectInputStream(fileIn);
 			try {
-				this.reverseVocabulary = (HashMap<String, Integer>) objInStream.readObject();
-				this.reverseTags = (HashMap<String, Integer>) objInStream.readObject();
-				this.reverseLabels = (HashMap<String, Integer>) objInStream.readObject();
-				this.labelsList = (List<String>) objInStream.readObject();
 				this.network = (NeuralNetwork) objInStream.readObject();
 //				this.jnetwork = (NeuralNetworkJBLAS) objInStream.readObject();
 				System.out.println("Loaded model from: " + modelFile.toString());
@@ -420,6 +335,28 @@ public class DependencyParser {
 		this.initializeArcStandard();
 	}
 	
+	public void train(Path inputPath, Path validationFile, Path modelFile) {
+		File mFile = new File(modelFile.toString());
+		Path vocab = FileSystems.getDefault().getPath("data/", "vocabulary.mem");
+		this.deserializeVocabulary(vocab);
+		if (mFile.exists()) {
+			this.loadModel(modelFile);
+		} else {
+			this.initializeNeuralNetwork();
+		}
+		Path trainFile = FileSystems.getDefault().getPath("data", "trainingdata.csv");
+		Path validFile = FileSystems.getDefault().getPath("data", "validationdata.csv");
+		this.generateData(inputPath, trainFile, true);
+		this.generateData(validationFile, validFile, false);
+		List<TrainingExample> trainExamples = this.getExamples(trainFile);
+		List<TrainingExample> validExamples = this.getExamples(validFile);
+		
+		if (!trainExamples.isEmpty()) {
+			this.train(trainExamples, validExamples, modelFile);
+		}
+		this.serialize(modelFile);
+	}
+	
 	public DependencyTree predict(List<Token> sentence) {
 		Configuration c = this.arcStandard.initialConfiguration(sentence);
 		while (!this.arcStandard.isTerminal(c)) {
@@ -427,10 +364,13 @@ public class DependencyParser {
 			int[] wordInputs = this.listToArray(state.getWords());
 			int[] tagInputs = this.listToArray(state.getTags());
 			int[] labelInputs = this.listToArray(state.getLabels());
-			int transitionId = this.network.chooseTransition(wordInputs, tagInputs, labelInputs);
+			int best = 0;
+			int transitionId = this.network.chooseTransition(wordInputs, tagInputs, labelInputs, best);
 			String transition = this.arcStandard.getTransition(transitionId);
-			if (!this.arcStandard.canApply(c, transition)) {
-				transitionId = this.network.chooseSecondBestTransition(wordInputs, tagInputs, labelInputs);
+			while (!this.arcStandard.canApply(c, transition)) {
+				++best;
+				transitionId = this.network.chooseTransition(wordInputs, tagInputs, labelInputs, best);
+				transition = this.arcStandard.getTransition(transitionId);
 			}
 //			int transitionId = this.jnetwork.chooseTransition(wordInputs, tagInputs, labelInputs);
 			this.arcStandard.apply(c, transition);
@@ -460,17 +400,170 @@ public class DependencyParser {
 			las += this.getAS(predictedTree, dTree, true);
 			if (dTree.equals(predictedTree)) {
 				++correct;
-			} else {
-				System.out.println(dTree);
-				System.out.println();
-				System.out.println(predictedTree);
-				System.out.println();
-			}
+			} //else {
+//				System.out.println(dTree);
+//				System.out.println();
+//				System.out.println(predictedTree);
+//				System.out.println();
+//			}
+//			System.out.println("Sentences so far: " + total);
 		}
 		double percentage = (double) correct * 100 / (double) total;
 		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
 		System.out.println("UAS: " + (uas / total) + "%");
 		System.out.println("LAS: " + (las / total) + "%");
+	}
+	
+	private void populateVocabulary(Set<String> words) {
+		//add ROOT
+		int wordId = this.vocabulary.size() + 1;
+		if (this.vocabulary.isEmpty()) {
+			this.reverseVocabulary.put("ROOT", 1);
+			this.vocabulary.put(1, "ROOT");
+			++wordId;
+		}
+		//add other words
+		Iterator<String> it = words.iterator();
+		while (it.hasNext()) {
+			String word = it.next();
+			if (!this.reverseVocabulary.containsKey(word)) {
+				this.reverseVocabulary.put(word, wordId);
+				this.vocabulary.put(wordId, word);
+				++wordId;
+			}
+		}
+	}
+	
+	private void populatePOStags(Set<String> tags) {
+		int tagId = this.tags.size() + 1;
+		Iterator<String> it = tags.iterator();
+		while (it.hasNext()) {
+			String tag = it.next();
+			if (!this.reverseTags.containsKey(tag)) {
+				this.tags.put(tagId, tag);
+				this.reverseTags.put(tag, tagId);
+				++tagId;	
+			}
+		}
+	}
+	
+	private void populateLabels(Set<String> labels) {
+		int labelId = this.labels.size() + 1;
+		Iterator<String> it = labels.iterator();
+		while (it.hasNext()) {
+			String label = it.next();
+			if (!this.reverseLabels.containsKey(label)) {
+				this.labels.put(labelId, label);
+				this.reverseLabels.put(label, labelId);
+				this.labelsList.add(label);
+				++labelId;
+			}
+		}
+	}
+	
+	private void initializeArcStandard() {
+		this.arcStandard = new ArcStandard(this.labelsList);
+	}
+	
+	private void initializeNeuralNetwork() {
+		this.network = new NeuralNetwork(18, 18, 12,
+				this.vocabulary.size(), this.tags.size(), this.labels.size(),
+				200, 2*this.labels.size()+1, 50);
+//		this.jnetwork = new NeuralNetworkJBLAS(18, 18, 12,
+//				this.vocabulary.size(), this.tags.size(), this.labels.size(),
+//				200, 2*this.labels.size()+1, 50);
+	}
+	
+	private void train(List<TrainingExample> trainData, List<TrainingExample> validData, Path modelFile) {
+		TrainingExample[] randomAccessData = trainData.toArray(new TrainingExample[0]);
+		int[] indices = MatrixOperations.initializeIndices(trainData.size());
+		int iterations = 1;
+		double prevTrainError = Double.POSITIVE_INFINITY;
+		double prevValidError = Double.POSITIVE_INFINITY;
+		double trainError = Double.POSITIVE_INFINITY;
+		double validError = Double.POSITIVE_INFINITY;
+		do {
+			prevTrainError = trainError;
+			prevValidError = validError;
+			long start = System.currentTimeMillis();
+			System.out.println("Starting iteration " + iterations);
+			System.out.flush();
+			this.network.trainIteration(randomAccessData, indices);
+			System.out.println("Iteration took: " + (System.currentTimeMillis() - start) + " milliseconds");
+			System.out.flush();
+			start = System.currentTimeMillis();
+			trainError = this.network.computeError(trainData);
+			validError = this.network.computeError(validData);
+			System.out.println("Computing errors took: " + (System.currentTimeMillis() - start) + " milliseconds");
+			System.out.println("Training Error: " + trainError);
+			System.out.println("Validation Error: " + validError);
+			System.out.println("Iteration: " + iterations);
+			System.out.flush();
+			this.backupModel(modelFile);
+			this.serialize(modelFile);
+			++iterations;
+		} while (iterations < 8 || trainError > DependencyParser.convergenceThreshold || !this.hasConverged(prevTrainError, trainError, prevValidError, validError));
+	}
+	
+	private boolean hasConverged(double prevTrainError, double trainError,
+								 double prevValidError, double validError) {
+		return (prevTrainError > trainError) && (prevValidError < validError);
+	}
+	
+	private TrainingExample getTrainingExample(String line) {
+		String[] rawExample = line.split(",");
+		int[] wordInputs = new int[18];
+		for (int i = 0; i < 18; ++i) {
+			wordInputs[i] = Integer.parseInt(rawExample[i]);
+		}
+		int[] tagInputs = new int[18];
+		int offset = 18;
+		for (int i = 0; i < 18; ++i) {
+			tagInputs[i] = Integer.parseInt(rawExample[offset + i]);
+		}
+		int[] labelInputs = new int[12];
+		offset += 18;
+		for (int i = 0; i < 12; ++i) {
+			labelInputs[i] = Integer.parseInt(rawExample[offset + i]);
+		}
+		int output = Integer.parseInt(rawExample[offset + 12]);
+		return new TrainingExample(wordInputs, tagInputs, labelInputs, output);
+	}
+	
+	private void serialize(Path modelFile) {
+		try {
+			OutputStream fileOut = Files.newOutputStream(modelFile);
+			ObjectOutputStream objOutStream = new ObjectOutputStream(fileOut);
+			objOutStream.writeObject(this.network);
+//			objOutStream.writeObject(this.jnetwork);
+			objOutStream.close();
+			fileOut.close();
+			System.out.println("Serialized in " + modelFile.toString());
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Some step of serialization failed..." + " " + e.getMessage());
+		}
+	}
+	
+	private void backupModel(Path modelFile) {
+		File mFile = new File(modelFile.toString());
+		if (!mFile.exists()) {
+			return;
+		}
+		Path modelFileBakPath = modelFile.resolveSibling(modelFile.getFileName() + ".bak");
+		File modelFileBak = new File(modelFileBakPath.toString());
+		if (modelFileBak.exists()) {
+			modelFileBak.delete();
+		}
+		try {
+			Files.move(modelFile, modelFileBakPath);
+			System.out.println("Backed up in " + modelFileBakPath.toString());
+		} catch (IOException e) {
+			System.err.println("Faled to create backup model" + e.getMessage());
+			System.out.println(modelFile.toString());
+			System.out.println(modelFileBakPath.toString());
+			e.printStackTrace();
+		}
 	}
 	
 	private double getAS(DependencyTree tree, DependencyTree goldTree, boolean labeled) {
@@ -483,9 +576,8 @@ public class DependencyParser {
 		return (double) 100 * correct / (double) goldTree.size();
 	}
 	
-	private void generateTrainingData(Path inputFile, Path outputFile) {
+	private void generateData(Path inputFile, Path outputFile, boolean training) {
 		this.openFile(inputFile);
-		this.initializeData();
 		PrintWriter writer = null;
 		try {
 			writer = new PrintWriter(outputFile.toFile(), "UTF-8");
@@ -497,12 +589,30 @@ public class DependencyParser {
 				this.saveOracleDependencyTreeParse(parsedSentence, dTree, writer);
 			}
 		} catch (FileNotFoundException | UnsupportedEncodingException e) {
-			System.err.println("Could not open file for writing training data!" + " " + e.getMessage());
+			System.err.println("Could not open file for writing data!" + " " + e.getMessage());
 		} finally {
 			if (writer != null) {
 				writer.close();
 			}
 		}
+	}
+	
+	private List<TrainingExample> getExamples(Path examplesFile) {
+		List<TrainingExample> examples = new LinkedList<TrainingExample>();
+		try {
+			BufferedReader reader = Files.newBufferedReader(examplesFile);
+			//skip header
+			String line = reader.readLine();
+			while ((line = reader.readLine()) != null) {
+				TrainingExample example = this.getTrainingExample(line);
+				examples.add(example);
+			}
+			reader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Could not open conllu file: " + examplesFile + " " + e.getMessage());
+		}
+		return examples;
 	}
 	
 	private int[] listToArray(List<Integer> list) {
@@ -680,17 +790,39 @@ public class DependencyParser {
 		}
 		
 		DependencyParser parser = new DependencyParser();
+		Path vocab = FileSystems.getDefault().getPath("data/", "vocabulary.mem");
 		Path modelFile;
 		
 		switch (args[0]) {
+		case "--buildVocab":
+			if (args.length < 4) {
+				System.out.println("Usage: --buildVocab <training file> <validation file> <testing file>");
+				return;
+			}
+			Path trainData = FileSystems.getDefault().getPath("data/UD_English", args[1]);
+			Path validData = FileSystems.getDefault().getPath("data/UD_English", args[2]);
+			Path testData = FileSystems.getDefault().getPath("data/UD_English", args[3]);
+			parser.buildVocabulary(trainData, validData, testData);
+			parser.serializeVocabulary(vocab);
+			break;
 		case "--train":
+			if (args.length < 3) {
+				System.out.println("Usage: --train <training file> <validation file>");
+				return;
+			}
 			Path inputPath = FileSystems.getDefault().getPath("data/UD_English", args[1]);
+			Path validPath = FileSystems.getDefault().getPath("data/UD_English", args[2]);
 			modelFile = FileSystems.getDefault().getPath("data", "model.mem");
-			parser.train(inputPath, modelFile);
+//			parser.train(inputPath, validPath, modelFile);
 			break;
 		case "--test":
+			if (args.length < 3) {
+				System.out.println("Usage: --test <test file> <model file>");
+				return;
+			}
 			Path testFile = FileSystems.getDefault().getPath("data/UD_English", args[1]);
-			modelFile = FileSystems.getDefault().getPath("data", "model.mem");
+			modelFile = FileSystems.getDefault().getPath("data", args[2]);
+			parser.deserializeVocabulary(vocab);
 			parser.loadModel(modelFile);
 			parser.test(testFile);
 			break;
