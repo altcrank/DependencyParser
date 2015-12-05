@@ -1,0 +1,19 @@
+Wtf WP
+is VBZ
+this DT
+? .
+
+0 root 1 right
+1 cop 2 right
+1 nsubj 3 right
+1 punct 4 right
+
+0 root 3 right
+3 nsubj 1 left
+3 cop 2 left
+3 punct 4 right
+
+0 root 3 right
+3 nsubj 1 left
+3 cop 2 left
+3 punct 4 right

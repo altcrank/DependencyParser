@@ -1,0 +1,30 @@
+What WP
+if IN
+Google NNP
+morphed VBD
+into IN
+GoogleOS NNP
+? .
+
+0 root 1 right
+1 advcl 4 right
+4 mark 2 left
+4 nsubj 3 left
+4 nmod 6 right
+4 punct 7 right
+6 case 5 left
+
+0 root 1 right
+1 advcl 4 right
+1 punct 7 right
+4 mark 2 left
+4 nsubj 3 left
+4 nmod 6 right
+6 case 5 left
+
+0 root 4 right
+4 dep 1 left
+4 mark 2 left
+4 nsubj 3 left
+4 nmod 6 right
+6 case 5 right

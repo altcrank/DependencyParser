@@ -1,0 +1,19 @@
+Fresh JJ
+and CC
+excellent JJ
+quality NN
+
+0 root 1 right
+1 cc 2 right
+1 conj 4 right
+4 amod 3 left
+
+0 root 4 right
+1 cc 2 right
+1 conj 3 right
+4 amod 1 left
+
+0 root 1 right
+1 cc 2 right
+1 conj 4 right
+4 compound 3 left

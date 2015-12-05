@@ -50,6 +50,8 @@ public class DependencyParser {
 	private Map<String, Integer> reverseTags;
 	private Map<String, Integer> reverseLabels;
 	
+	private Set<String> trainVocabulary;
+	
 	public DependencyParser() {
 		this.filePath = null;
 		this.reader = null;
@@ -64,6 +66,7 @@ public class DependencyParser {
 		this.reverseVocabulary = new HashMap<String, Integer>();
 		this.reverseTags = new HashMap<String, Integer>();
 		this.reverseLabels = new HashMap<String, Integer>();
+		this.trainVocabulary = new HashSet<String>();
 	}
 	
 	public void openFile(Path filePath) {
@@ -285,6 +288,17 @@ public class DependencyParser {
 		return dTree;
 	}
 	
+	public DependencyTree getOracleDependencyTree(List<Token> sentence, DependencyTree goldTree) {
+		Configuration c = this.arcStandard.initialConfiguration(sentence);
+		while (!this.arcStandard.isTerminal(c)) {
+			String transition = this.arcStandard.getOracle(c, goldTree);
+			this.arcStandard.apply(c, transition);
+		}
+		DependencyTree predictedTree = c.getDependencyTree();
+		predictedTree.sort();
+		return predictedTree;
+	}
+	
 	public void saveOracleDependencyTreeParse(List<Token> sentence, DependencyTree goldTree, PrintWriter writer) {
 		Configuration c = this.arcStandard.initialConfiguration(sentence);
 		List<List<Integer>> parseFeatures = new LinkedList<List<Integer>>();
@@ -386,6 +400,31 @@ public class DependencyParser {
 		this.openFile(testFile);
 		double uas = 0;
 		double las = 0;
+		int nonprojective = 0;
+		double puas = 0;
+		double plas = 0;
+		int correctWithUnknownWords = 0;
+		int wrongWithUnknownWords = 0;
+		
+		Path wrongProjective = FileSystems.getDefault().getPath("data", "projectiveTrees.txt");
+		Path wrongNonProjective = FileSystems.getDefault().getPath("data", "nonprojectiveTrees.txt");
+		Path unknownWordsPath = FileSystems.getDefault().getPath("data/", "unknownWords.txt");
+		
+		PrintWriter writerProj = null;
+		PrintWriter writerNonProj = null;
+		PrintWriter unknownWordsWriter = null;
+		try {
+			writerProj = new PrintWriter(wrongProjective.toFile(), "UTF-8");
+			writerNonProj = new PrintWriter(wrongNonProjective.toFile(), "UTF-8");
+			unknownWordsWriter = new PrintWriter(unknownWordsPath.toFile(), "UTF-8"); 
+		} catch (Exception e) {
+			System.err.println("Could not open file to write wrong trees: " + e.getMessage());
+			e.printStackTrace();
+		}
+		
+		this.initTrainVocabulary();
+		Set<String> allUnknownWords = new TreeSet<String>();
+		
 		while (this.hasNextSentence()) {
 			List<Token> parsedSentence = this.tokenizeNextSentence();
 			if (parsedSentence.isEmpty()) {
@@ -393,28 +432,85 @@ public class DependencyParser {
 			}
 			++total;
 			
+			List<String> unknownWords = this.collectUnknownWords(parsedSentence);
+			for (String word : unknownWords) {
+				allUnknownWords.add(word);
+			}
+			boolean hasUnknownWords = !unknownWords.isEmpty();
+			
 			DependencyTree dTree = this.getSentenceDependencyTree(parsedSentence);
 			dTree.sort();
+			
+			DependencyTree oracleTree = this.getOracleDependencyTree(parsedSentence, dTree);
+			boolean projective = dTree.equals(oracleTree);
+			if (!projective) {
+				++nonprojective;
+			}
+			
 			DependencyTree predictedTree = this.predict(parsedSentence);
+			
+			if (projective) {
+				puas += this.getAS(predictedTree, dTree, false);
+				plas += this.getAS(predictedTree, dTree, true);
+			}
+			
 			uas += this.getAS(predictedTree, dTree, false);
 			las += this.getAS(predictedTree, dTree, true);
+
 			if (dTree.equals(predictedTree)) {
 				++correct;
+				if (hasUnknownWords) {
+					++correctWithUnknownWords;
+				}
 			} else {
-				System.out.println(dTree);
-				System.out.println();
-				System.out.println(predictedTree);
-				System.out.println();
+				if (hasUnknownWords) {
+					++wrongWithUnknownWords;
+				}
+				if (projective) {
+					writerProj.println("Sentence " + total + ":");
+					writerProj.println(dTree);
+					writerProj.println();
+					writerProj.println(predictedTree);
+					writerProj.println();
+				} else {
+					writerNonProj.println("Sentence " + total + ":");
+					writerNonProj.println(dTree);
+					writerNonProj.println();
+					writerNonProj.println(predictedTree);
+					writerNonProj.println();
+				}
 			}
-			System.out.println("Sentences so far: " + total);
 		}
 		double percentage = (double) correct * 100 / (double) total;
 		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
+		System.out.println("Nonprojective: " + nonprojective);
 		System.out.println("UAS: " + (uas / total) + "%");
 		System.out.println("LAS: " + (las / total) + "%");
+		System.out.println("Projective UAS: " + (puas / (total - nonprojective)));
+		System.out.println("Projective LAS: " + (plas / (total - nonprojective)));
+		System.out.println("Correct with unknown words: " + correctWithUnknownWords);
+		System.out.println("Wrong with unknown words: " + wrongWithUnknownWords);
+		
+		for (String word : allUnknownWords) {
+			unknownWordsWriter.println(word);
+		}
+		
+		writerProj.close();
+		writerNonProj.close();
+		unknownWordsWriter.close();
 	}
 	
-	public void dumpEmbeddingsToFile(Path modelFile, String choice) {
+	private List<String> collectUnknownWords(List<Token> sentence) {
+		List<String> unknownWords = new LinkedList<String>();
+		for (Token token : sentence) {
+			if (!this.trainVocabulary.contains(token.getLemma())) {
+				unknownWords.add(token.getLemma());
+			}
+		}
+		return unknownWords;
+	}
+	
+	private void dumpEmbeddingsToFile(Path modelFile, String choice) {
 		Path vocab = FileSystems.getDefault().getPath("data", "vocabulary.mem");
 		this.deserializeVocabulary(vocab);
 		this.loadModel(modelFile);
@@ -467,6 +563,44 @@ public class DependencyParser {
 			writer.print(label);
 		}
 		writer.close();
+	}
+	
+	private void initTrainVocabulary() {
+		BufferedReader trainReader = null;
+		Path trainFile = FileSystems.getDefault().getPath("data/UD_English", "en-ud-train.conllu");
+		try {
+			trainReader = Files.newBufferedReader(trainFile);
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Could not open conllu file: " + e.getMessage());
+			return;
+		}
+		
+		String line = new String();
+		while (line != null) {
+			try {
+				line = trainReader.readLine();
+				if (line == null) {
+					break;
+				}
+			} catch (IOException e) {
+				System.err.println("Failed to read word " + e.getMessage());
+				continue;
+			}
+			if (line.isEmpty() || line.charAt(0) == '#') {
+				continue;
+			}
+			String[] parts = line.split("\t");
+			Token token = new Token(parts, 0);
+			this.trainVocabulary.add(token.getLemma());
+		}
+		
+		try {
+			trainReader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("Failed to close file: " + e.getMessage());
+		}
 	}
 	
 	private List<String> getEmbeddingLabels(String choice) {
