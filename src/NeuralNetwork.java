@@ -120,6 +120,18 @@ public class NeuralNetwork implements Serializable {
 		this.printNN();
 	}
 	
+	public double[][] getEmbeddings(String embeddings) {
+		switch (embeddings) {
+		case "words":
+			return MatrixOperations.transpose(this.wordEmbeddings);
+		case "tags":
+			return MatrixOperations.transpose(this.tagEmbeddings);
+		case "labels":
+			return MatrixOperations.transpose(this.labelEmbeddings);
+		}
+		return null;
+	}
+	
 	public int chooseTransition(int[] wordInputs, int[] tagInputs, int[] labelInputs, int best) {
 		double[] inputWordEmbeddingsVector = this.getWordEmbeddingsVector(wordInputs);
 		double[] inputTagsEmbeddingsVector = this.getTagEmbeddingsVector(tagInputs);

@@ -400,13 +400,13 @@ public class DependencyParser {
 			las += this.getAS(predictedTree, dTree, true);
 			if (dTree.equals(predictedTree)) {
 				++correct;
-			} //else {
-//				System.out.println(dTree);
-//				System.out.println();
-//				System.out.println(predictedTree);
-//				System.out.println();
-//			}
-//			System.out.println("Sentences so far: " + total);
+			} else {
+				System.out.println(dTree);
+				System.out.println();
+				System.out.println(predictedTree);
+				System.out.println();
+			}
+			System.out.println("Sentences so far: " + total);
 		}
 		double percentage = (double) correct * 100 / (double) total;
 		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
@@ -414,12 +414,90 @@ public class DependencyParser {
 		System.out.println("LAS: " + (las / total) + "%");
 	}
 	
+	public void dumpEmbeddingsToFile(Path modelFile, String choice) {
+		Path vocab = FileSystems.getDefault().getPath("data", "vocabulary.mem");
+		this.deserializeVocabulary(vocab);
+		this.loadModel(modelFile);
+		double[][] embeddings = this.network.getEmbeddings(choice);
+		if (embeddings == null) {
+			return;
+		}
+		Path outFilePath = FileSystems.getDefault().getPath("data", choice + "Embeddings.txt");
+		PrintWriter writer = null;
+		try {
+			writer = new PrintWriter(outFilePath.toFile(), "UTF-8");
+		} catch (Exception e) {
+			System.err.println("Could not open file to dump embeddings: " + e.getMessage());
+			e.printStackTrace();
+			writer = null;
+		}
+		if (writer == null) {
+			return;
+		}
+		for (int row = 0; row < embeddings.length; ++row) {
+			for (int col = 0; col < embeddings[0].length; ++col) {
+				if (col > 0) {
+					writer.print(" ");
+				}
+				writer.print(embeddings[row][col]);
+			}
+			writer.println();
+		}
+		writer.close();
+		//write the corresponding words/tags/labels
+		List<String> labels = this.getEmbeddingLabels(choice);
+		outFilePath = FileSystems.getDefault().getPath("data", choice + "Labels.txt");
+		try {
+			writer = new PrintWriter(outFilePath.toFile(), "UTF-8");
+		} catch (Exception e) {
+			System.err.println("Could not open file to dump labels: " + e.getMessage());
+			e.printStackTrace();
+			writer = null;
+		}
+		if (writer == null) {
+			return;
+		}
+		boolean first = true;
+		for (String label : labels) {
+			if (first) {
+				first = false;
+			} else {
+				writer.print(" ");
+			}
+			writer.print(label);
+		}
+		writer.close();
+	}
+	
+	private List<String> getEmbeddingLabels(String choice) {
+		Map<Integer, String> embeddingLabels = null;
+		switch (choice) {
+		case "words":
+			embeddingLabels = this.vocabulary;
+			break;
+		case "tags":
+			embeddingLabels = this.tags;
+			break;
+		case "labels":
+			embeddingLabels = this.labels;
+			break;
+		}
+		if (embeddingLabels == null) {
+			return null;
+		}
+		List<String> embLabelsList = new LinkedList<String>();
+		for (int i = 1; i <= embeddingLabels.size(); ++i) {
+			embLabelsList.add(embeddingLabels.get(i));
+		}
+		return embLabelsList;
+	}
+	
 	private void populateVocabulary(Set<String> words) {
 		//add ROOT
 		int wordId = this.vocabulary.size() + 1;
 		if (this.vocabulary.isEmpty()) {
-			this.reverseVocabulary.put("ROOT", 1);
-			this.vocabulary.put(1, "ROOT");
+			this.reverseVocabulary.put("ROOT", wordId);
+			this.vocabulary.put(wordId, "ROOT");
 			++wordId;
 		}
 		//add other words
@@ -796,7 +874,7 @@ public class DependencyParser {
 		switch (args[0]) {
 		case "--buildVocab":
 			if (args.length < 4) {
-				System.out.println("Usage: --buildVocab <training file> <validation file> <testing file>");
+				System.out.println("Usage: java DependencyParser --buildVocab <training file> <validation file> <testing file>");
 				return;
 			}
 			Path trainData = FileSystems.getDefault().getPath("data/UD_English", args[1]);
@@ -807,17 +885,17 @@ public class DependencyParser {
 			break;
 		case "--train":
 			if (args.length < 3) {
-				System.out.println("Usage: --train <training file> <validation file>");
+				System.out.println("Usage: java DependencyParser --train <training file> <validation file>");
 				return;
 			}
-			Path inputPath = FileSystems.getDefault().getPath("data/UD_English", args[1]);
-			Path validPath = FileSystems.getDefault().getPath("data/UD_English", args[2]);
-			modelFile = FileSystems.getDefault().getPath("data", "model.mem");
+//			Path inputPath = FileSystems.getDefault().getPath("data/UD_English", args[1]);
+//			Path validPath = FileSystems.getDefault().getPath("data/UD_English", args[2]);
+//			modelFile = FileSystems.getDefault().getPath("data", "model.mem");
 //			parser.train(inputPath, validPath, modelFile);
 			break;
 		case "--test":
 			if (args.length < 3) {
-				System.out.println("Usage: --test <test file> <model file>");
+				System.out.println("Usage: java DependencyParser --test <test file> <model file>");
 				return;
 			}
 			Path testFile = FileSystems.getDefault().getPath("data/UD_English", args[1]);
@@ -825,6 +903,18 @@ public class DependencyParser {
 			parser.deserializeVocabulary(vocab);
 			parser.loadModel(modelFile);
 			parser.test(testFile);
+			break;
+		case "--emb":
+			if (args.length < 3) {
+				System.out.println("Usage: java DependencyParser --emb <modelFile> <words/tags/labels>");
+				return;
+			}
+			if (!args[2].equals("words") && !args[2].equals("tags") && !args[2].equals("labels")) {
+				System.out.println("Usage: java DependencyParser --emb <modelFile> <words/tags/labels>");
+				return;
+			}
+			modelFile = FileSystems.getDefault().getPath("data/", args[1]);
+			parser.dumpEmbeddingsToFile(modelFile, args[2]);
 			break;
 		}
 	}

@@ -1,0 +1,1 @@
+acl acl:relcl advcl advmod amod appos aux auxpass case cc cc:preconj ccomp compound compound:prt conj cop csubj csubjpass dep det det:predet discourse dislocated dobj expl foreign goeswith iobj list mark mwe name neg nmod nmod:npmod nmod:poss nmod:tmod nsubj nsubjpass nummod parataxis punct remnant reparandum root vocative xcomp
