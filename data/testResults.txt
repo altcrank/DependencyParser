@@ -2,9 +2,9 @@ Loaded model from: data/vocabulary.mem
 Loaded model from: data/model.mem.bak
 Correct: 945 out of: 2077 45.49831487722677%
 Nonprojective: 76
-UAS: 87.1270902668996%
-LAS: 84.27032947830382%
-Projective UAS: 87.8658737695443
-Projective LAS: 85.03837739179241
+UAS: Mean: 87.1270902668996% , StDef: 20.050438596531723%
+LAS: Mean: 84.27032947830382% , StDef: 21.252565868068473%
+Projective UAS: Mean: 87.8658737695443% , StDef: 19.69118443820128%
+Projective LAS: Mean: 85.03837739179241% , StDef: 20.94875175526277%
 Correct with unknown words: 327
 Wrong with unknown words: 652

@@ -398,11 +398,11 @@ public class DependencyParser {
 		int correct = 0;
 		int total = 0;
 		this.openFile(testFile);
-		double uas = 0;
-		double las = 0;
+		List<Double> uases = new LinkedList<Double>();
+		List<Double> lases = new LinkedList<Double>();
 		int nonprojective = 0;
-		double puas = 0;
-		double plas = 0;
+		List<Double> puas = new LinkedList<Double>();
+		List<Double> plas = new LinkedList<Double>();
 		int correctWithUnknownWords = 0;
 		int wrongWithUnknownWords = 0;
 		
@@ -450,12 +450,12 @@ public class DependencyParser {
 			DependencyTree predictedTree = this.predict(parsedSentence);
 			
 			if (projective) {
-				puas += this.getAS(predictedTree, dTree, false);
-				plas += this.getAS(predictedTree, dTree, true);
+				puas.add(this.getAS(predictedTree, dTree, false));
+				plas.add(this.getAS(predictedTree, dTree, true));
 			}
 			
-			uas += this.getAS(predictedTree, dTree, false);
-			las += this.getAS(predictedTree, dTree, true);
+			uases.add(this.getAS(predictedTree, dTree, false));
+			lases.add(this.getAS(predictedTree, dTree, true));
 
 			if (dTree.equals(predictedTree)) {
 				++correct;
@@ -484,10 +484,21 @@ public class DependencyParser {
 		double percentage = (double) correct * 100 / (double) total;
 		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
 		System.out.println("Nonprojective: " + nonprojective);
-		System.out.println("UAS: " + (uas / total) + "%");
-		System.out.println("LAS: " + (las / total) + "%");
-		System.out.println("Projective UAS: " + (puas / (total - nonprojective)));
-		System.out.println("Projective LAS: " + (plas / (total - nonprojective)));
+		double uasesMean = this.computeMean(uases);
+		double uasesStDef = this.computeStDef(uases, uasesMean);
+		System.out.println("UAS: Mean: " + uasesMean + "% , StDef: " + uasesStDef + "%");
+		
+		double lasesMean = this.computeMean(lases);
+		double lasesStDef = this.computeStDef(lases, lasesMean);
+		System.out.println("LAS: Mean: " + lasesMean + "% , StDef: " + lasesStDef + "%");
+		
+		double puasesMean = this.computeMean(puas);
+		double puasesStDef = this.computeStDef(puas, puasesMean);
+		System.out.println("Projective UAS: Mean: " + puasesMean + "% , StDef: " + puasesStDef + "%");
+		
+		double plasesMean = this.computeMean(plas);
+		double plasesStDef = this.computeStDef(plas, plasesMean);
+		System.out.println("Projective LAS: Mean: " + plasesMean + "% , StDef: " + plasesStDef + "%");
 		System.out.println("Correct with unknown words: " + correctWithUnknownWords);
 		System.out.println("Wrong with unknown words: " + wrongWithUnknownWords);
 		
@@ -508,6 +519,22 @@ public class DependencyParser {
 			}
 		}
 		return unknownWords;
+	}
+	
+	private double computeMean(List<Double> numbers) {
+		double mean = 0;
+		for (double number : numbers) {
+			mean += number;
+		}
+		return mean / numbers.size();
+	}
+	
+	private double computeStDef(List<Double> numbers, double mean) {
+		double var = 0;
+		for (double number : numbers) {
+			var += (number - mean) * (number - mean);
+		}
+		return Math.sqrt(var / numbers.size());
 	}
 	
 	private void dumpEmbeddingsToFile(Path modelFile, String choice) {
