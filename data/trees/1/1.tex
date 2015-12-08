@@ -1,0 +1,141 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[latin1]{inputenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage[compact,explicit]{titlesec}
+
+\usetikzlibrary{positioning, shapes, decorations.text}
+
+\begin{document}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+mynode/.style={rectangle,
+  fill=white!70,
+  text width=1cm,
+  align=center,
+},
+mypostaction/.style 2 args={
+  decoration={
+    text align={
+      left indent=#1},
+      text along path, 
+      text={#2}
+    },
+  decorate
+},
+>=latex
+]
+
+\node[mynode] (r)
+    {root};
+\node[mynode, right= 0.3cm of r] (what)
+    {What};
+\node[mynode, right= 0cm of what] (if)
+    {if};
+\node[mynode, right= 0cm of if] (google)
+    {Google};
+\node[mynode, right= 0.3cm of google] (morphed)
+    {morphed};
+\node[mynode, right= 0.5cm of morphed] (into)
+    {into};
+\node[mynode, right= 0cm of into] (gos)
+    {GoogleOS};
+\node[mynode, right= 0.8cm of gos] (qm)
+    {?};
+
+\draw[->,thick,black] (r.north) to[out=90,in=90,looseness=1] (what.100);
+\path[postaction={mypostaction={0.5cm}{root}, /pgf/decoration/raise=1.5mm}] (r.north) to[out=90,in=90,looseness=1] (what.100);
+
+\draw[->,thick,black] (what.80) to[out=90,in=90,looseness=1] (morphed.north);
+\path[postaction={mypostaction={2cm}{advcl}, /pgf/decoration/raise=1.5mm}] (what.80) to[out=90,in=90,looseness=1] (morphed.north);
+
+\draw[->,thick,black] (morphed.100) to[out=90,in=90,looseness=1] (if.north);
+\path[postaction={mypostaction={1cm}{mark}, /pgf/decoration/raise=1.5mm}] (if.north) to[out=90,in=90,looseness=1] (morphed.100);
+
+\draw[->,thick,black] (morphed.100) to[out=90,in=90,looseness=1] (google.north);
+\path[postaction={mypostaction={0.5cm}{nsubj}, /pgf/decoration/raise=1.5mm}] (google.north) to[out=90,in=90,looseness=1] (morphed.100);
+
+\draw[->,thick,black] (morphed.80) to[out=90,in=90,looseness=1] (gos.north);
+\path[postaction={mypostaction={1.5cm}{nmod}, /pgf/decoration/raise=1.5mm}] (morphed.80) to[out=90,in=90,looseness=1] (gos.north);
+
+\draw[->,thick,black] (gos.100) to[out=90,in=90,looseness=1] (into.north);
+\path[postaction={mypostaction={0.5cm}{case}, /pgf/decoration/raise=1.5mm}] (into.north) to[out=90,in=90,looseness=1] (gos.100);
+
+\draw[->,thick,black] (morphed.80) to[out=90,in=90,looseness=1] (qm.north);
+\path[postaction={mypostaction={3cm}{punct}, /pgf/decoration/raise=1.5mm}] (morphed.80) to[out=90,in=90,looseness=1] (qm.north);
+\end{tikzpicture}
+\caption{Golden parse}
+\label{Fig2}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+mynode/.style={rectangle,
+  fill=white!70,
+  text width=1cm,
+  align=center,
+},
+mypostaction/.style 2 args={
+  decoration={
+    text align={
+      left indent=#1},
+      text along path, 
+      text={#2}
+    },
+  decorate
+},
+>=latex
+]
+
+\node[mynode] (r)
+    {root};
+\node[mynode, right= 0.3cm of r] (what)
+    {What};
+\node[mynode, right= 0cm of what] (if)
+    {if};
+\node[mynode, right= 0cm of if] (google)
+    {Google};
+\node[mynode, right= 0.3cm of google] (morphed)
+    {morphed};
+\node[mynode, right= 0.5cm of morphed] (into)
+    {into};
+\node[mynode, right= 0cm of into] (gos)
+    {GoogleOS};
+\node[mynode, right= 0.8cm of gos] (qm)
+    {?};
+
+\draw[->,thick,black] (r.north) to[out=90,in=90,looseness=1] (what.100);
+\path[postaction={mypostaction={0.5cm}{root}, /pgf/decoration/raise=1.5mm}] (r.north) to[out=90,in=90,looseness=1] (what.100);
+
+\draw[->,thick,black] (what.80) to[out=90,in=90,looseness=1] (morphed.north);
+\path[postaction={mypostaction={2cm}{advcl}, /pgf/decoration/raise=1.5mm}] (what.80) to[out=90,in=90,looseness=1] (morphed.north);
+
+\draw[->,thick,black] (morphed.100) to[out=90,in=90,looseness=1] (if.north);
+\path[postaction={mypostaction={1cm}{mark}, /pgf/decoration/raise=1.5mm}] (if.north) to[out=90,in=90,looseness=1] (morphed.100);
+
+\draw[->,thick,black] (morphed.100) to[out=90,in=90,looseness=1] (google.north);
+\path[postaction={mypostaction={0.5cm}{nsubj}, /pgf/decoration/raise=1.5mm}] (google.north) to[out=90,in=90,looseness=1] (morphed.100);
+
+\draw[->,thick,black] (morphed.80) to[out=90,in=90,looseness=1] (gos.north);
+\path[postaction={mypostaction={1.5cm}{nmod}, /pgf/decoration/raise=1.5mm}] (morphed.80) to[out=90,in=90,looseness=1] (gos.north);
+
+\draw[->,thick,black] (gos.100) to[out=90,in=90,looseness=1] (into.north);
+\path[postaction={mypostaction={0.5cm}{case}, /pgf/decoration/raise=1.5mm}] (into.north) to[out=90,in=90,looseness=1] (gos.100);
+
+\draw[->,thick,black] (what.80) to[out=90,in=90,looseness=1] (qm.north);
+\path[postaction={mypostaction={5.5cm}{punct}, /pgf/decoration/raise=1.5mm}] (what.80) to[out=90,in=90,looseness=1] (qm.north);
+\end{tikzpicture}
+\caption{Our parse}
+\label{Fig2}
+\end{figure}
+
+\end{document}

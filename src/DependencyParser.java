@@ -406,6 +406,9 @@ public class DependencyParser {
 		int correctWithUnknownWords = 0;
 		int wrongWithUnknownWords = 0;
 		
+		Map<Integer, List<Double>> uasesPerSentenceLength = new HashMap<Integer, List<Double>>();
+		Map<Integer, List<Double>> lasesPerSentenceLength = new HashMap<Integer, List<Double>>();
+		
 		Path wrongProjective = FileSystems.getDefault().getPath("data", "projectiveTrees.txt");
 		Path wrongNonProjective = FileSystems.getDefault().getPath("data", "nonprojectiveTrees.txt");
 		Path unknownWordsPath = FileSystems.getDefault().getPath("data/", "unknownWords.txt");
@@ -454,8 +457,13 @@ public class DependencyParser {
 				plas.add(this.getAS(predictedTree, dTree, true));
 			}
 			
-			uases.add(this.getAS(predictedTree, dTree, false));
-			lases.add(this.getAS(predictedTree, dTree, true));
+			double uas = this.getAS(predictedTree, dTree, false); 
+			double las = this.getAS(predictedTree, dTree, true); 
+			uases.add(uas);
+			lases.add(las);
+			
+			this.accumulateScoresPerSentenceLength(uasesPerSentenceLength, uas, parsedSentence.size());
+			this.accumulateScoresPerSentenceLength(lasesPerSentenceLength, las, parsedSentence.size());
 
 			if (dTree.equals(predictedTree)) {
 				++correct;
@@ -485,22 +493,34 @@ public class DependencyParser {
 		System.out.println("Correct: " + correct + " out of: " + total + " " + percentage + "%");
 		System.out.println("Nonprojective: " + nonprojective);
 		double uasesMean = this.computeMean(uases);
-		double uasesStDef = this.computeStDef(uases, uasesMean);
-		System.out.println("UAS: Mean: " + uasesMean + "% , StDef: " + uasesStDef + "%");
+		double uasesStDev = this.computeStDev(uases, uasesMean);
+		System.out.println("UAS: Mean: " + uasesMean + "% , StDef: " + uasesStDev + "%");
 		
 		double lasesMean = this.computeMean(lases);
-		double lasesStDef = this.computeStDef(lases, lasesMean);
-		System.out.println("LAS: Mean: " + lasesMean + "% , StDef: " + lasesStDef + "%");
+		double lasesStDev = this.computeStDev(lases, lasesMean);
+		System.out.println("LAS: Mean: " + lasesMean + "% , StDef: " + lasesStDev + "%");
 		
 		double puasesMean = this.computeMean(puas);
-		double puasesStDef = this.computeStDef(puas, puasesMean);
-		System.out.println("Projective UAS: Mean: " + puasesMean + "% , StDef: " + puasesStDef + "%");
+		double puasesStDev = this.computeStDev(puas, puasesMean);
+		System.out.println("Projective UAS: Mean: " + puasesMean + "% , StDef: " + puasesStDev + "%");
 		
 		double plasesMean = this.computeMean(plas);
-		double plasesStDef = this.computeStDef(plas, plasesMean);
-		System.out.println("Projective LAS: Mean: " + plasesMean + "% , StDef: " + plasesStDef + "%");
+		double plasesStDev = this.computeStDev(plas, plasesMean);
+		System.out.println("Projective LAS: Mean: " + plasesMean + "% , StDef: " + plasesStDev + "%");
 		System.out.println("Correct with unknown words: " + correctWithUnknownWords);
 		System.out.println("Wrong with unknown words: " + wrongWithUnknownWords);
+		
+		for (Map.Entry<Integer, List<Double>> entry : uasesPerSentenceLength.entrySet()) {
+			System.out.println("Sentences of length " + entry.getKey() + " total: " + entry.getValue().size());
+			uasesMean = this.computeMean(entry.getValue());
+			uasesStDev = this.computeStDev(entry.getValue(), uasesMean);
+			System.out.println("UAS: Mean: " + uasesMean + "% , StDef: " + uasesStDev + "%");
+			
+			List<Double> lasesPerSentence = lasesPerSentenceLength.get(entry.getKey());
+			lasesMean = this.computeMean(lasesPerSentence);
+			lasesStDev = this.computeStDev(lasesPerSentence, lasesMean);
+			System.out.println("LAS: Mean: " + lasesMean + "% , StDef: " + lasesStDev + "%");
+		}
 		
 		for (String word : allUnknownWords) {
 			unknownWordsWriter.println(word);
@@ -521,6 +541,13 @@ public class DependencyParser {
 		return unknownWords;
 	}
 	
+	private void accumulateScoresPerSentenceLength(Map<Integer, List<Double>> scores, double score, int length) {
+		if (!scores.containsKey(length)) {
+			scores.put(length, new LinkedList<Double>());
+		}
+		scores.get(length).add(score);
+	}
+	
 	private double computeMean(List<Double> numbers) {
 		double mean = 0;
 		for (double number : numbers) {
@@ -529,7 +556,7 @@ public class DependencyParser {
 		return mean / numbers.size();
 	}
 	
-	private double computeStDef(List<Double> numbers, double mean) {
+	private double computeStDev(List<Double> numbers, double mean) {
 		double var = 0;
 		for (double number : numbers) {
 			var += (number - mean) * (number - mean);

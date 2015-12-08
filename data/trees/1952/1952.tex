@@ -1,0 +1,111 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[latin1]{inputenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage[compact,explicit]{titlesec}
+
+\usetikzlibrary{positioning, shapes, decorations.text}
+
+\begin{document}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+mynode/.style={rectangle,
+  fill=white!70,
+  text width=1cm,
+  align=center,
+},
+mypostaction/.style 2 args={
+  decoration={
+    text align={
+      left indent=#1},
+      text along path, 
+      text={#2}
+    },
+  decorate
+},
+>=latex
+]
+
+\node[mynode] (r)
+    {root};
+\node[mynode, right= 0.3cm of r] (fresh)
+    {Fresh};
+\node[mynode, right= 0cm of fresh] (and)
+    {and};
+\node[mynode, right= 0cm of and] (excellent)
+    {excellent};
+\node[mynode, right= 0.5cm of excellent] (quality)
+    {quality};
+
+\draw[->,thick,black] (r.north) to[out=90,in=90,looseness=1] (fresh.100);
+\path[postaction={mypostaction={0.6cm}{root}, /pgf/decoration/raise=1.5mm}] (r.north) to[out=90,in=90,looseness=1] (fresh.100);
+
+\draw[->,thick,black] (fresh.80) to[out=90,in=90,looseness=1] (and.north);
+\path[postaction={mypostaction={0.6cm}{cc}, /pgf/decoration/raise=1.5mm}] (fresh.80) to[out=90,in=90,looseness=1] (and.north);
+
+\draw[->,thick,black] (fresh.80) to[out=90,in=90,looseness=1] (quality.north);
+\path[postaction={mypostaction={2.5cm}{conj}, /pgf/decoration/raise=1.5mm}] (fresh.80) to[out=90,in=90,looseness=1] (quality.north);
+
+\draw[->,thick,black] (quality.80) to[out=90,in=90,looseness=1] (excellent.north);
+\path[postaction={mypostaction={0.5cm}{amod}, /pgf/decoration/raise=1.5mm}] (excellent.80) to[out=90,in=90,looseness=1] (quality.north);
+\end{tikzpicture}
+\caption{Golden parse}
+\label{Fig2}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+mynode/.style={rectangle,
+  fill=white!70,
+  text width=1cm,
+  align=center,
+},
+mypostaction/.style 2 args={
+  decoration={
+    text align={
+      left indent=#1},
+      text along path, 
+      text={#2}
+    },
+  decorate
+},
+>=latex
+]
+
+\node[mynode] (r)
+    {root};
+\node[mynode, right= 0.3cm of r] (fresh)
+    {Fresh};
+\node[mynode, right= 0cm of fresh] (and)
+    {and};
+\node[mynode, right= 0cm of and] (excellent)
+    {excellent};
+\node[mynode, right= 0.5cm of excellent] (quality)
+    {quality};
+
+\draw[->,thick,black] (r.north) to[out=90,in=90,looseness=1] (quality.north);
+\path[postaction={mypostaction={3.5cm}{root}, /pgf/decoration/raise=1.5mm}] (r.north) to[out=90,in=90,looseness=1] (quality.north);
+
+\draw[->,thick,black] (quality.100) to[out=90,in=90,looseness=1] (fresh.north);
+\path[postaction={mypostaction={1.5cm}{amod}, /pgf/decoration/raise=1.5mm}] (fresh.north) to[out=90,in=90,looseness=1] (quality.100);
+
+\draw[->,thick,black] (fresh.80) to[out=90,in=90,looseness=1] (and.north);
+\path[postaction={mypostaction={1cm}{cc}, /pgf/decoration/raise=1.5mm}] (fresh.80) to[out=90,in=90,looseness=1] (and.north);
+
+\draw[->,thick,black] (fresh.80) to[out=90,in=90,looseness=1] (excellent.north);
+\path[postaction={mypostaction={1.5cm}{conj}, /pgf/decoration/raise=1.5mm}] (fresh.80) to[out=90,in=90,looseness=1] (excellent.80);
+\end{tikzpicture}
+\caption{Our parse}
+\label{Fig2}
+\end{figure}
+
+\end{document}
