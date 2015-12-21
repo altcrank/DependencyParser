@@ -77,22 +77,6 @@ public class ArcStandard {
 		return true;
 	}
 	
-/*
-  	//**
-	 * Determine whether the given transition is legal for this configuration
-	 * @param c Configuration
-	 * @param t Transition
-	 * @return Whether the given transition is legal for this configuration
-	 *//*
-	public boolean canApply(Configuration c, String t) {
-		
-	}
-	
-	public boolean canReach(Configuration c, DependencyTree dTree) {
-		
-	}
-*/
-	
 	/**
 	 * Recommend a transition
 	 * @param c	Current configuration

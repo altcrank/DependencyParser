@@ -173,6 +173,8 @@ if __name__ == "__main__":
     #print "Running example on 2,500 MNIST digits..."
     embeddings = Math.loadtxt(sys.argv[1]);
     labels = Math.loadtxt(sys.argv[2], dtype='string');
+    labelsFile = open(sys.argv[2], 'r')
+
     projectedEmbeddings = tsne(embeddings, 2, 50, 20.0);
     print labels
     print projectedEmbeddings

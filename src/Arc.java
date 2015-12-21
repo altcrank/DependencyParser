@@ -1,23 +1,9 @@
 
 public class Arc implements Comparable<Arc> {
 
-//	private int head;
 	private int headSentenceIndex;
-//	private int dependent;
 	private int dependentSentenceIndex;
 	private String label;
-	
-//	public Arc(int head, int headSentenceIndex, int dependent, int dependentSentenceIndex) {
-//		this(head, headSentenceIndex, dependent, dependentSentenceIndex, "");
-//	}
-//	
-//	public Arc(int head, int headSentenceIndex, int dependent, int dependentSentenceIndex, String label) {
-//		this.head = head;
-//		this.headSentenceIndex = headSentenceIndex;
-//		this.dependent = dependent;
-//		this.dependentSentenceIndex = dependentSentenceIndex;
-//		this.label = label;
-//	}
 	
 	public Arc(int headSentenceIndex, int dependentSentenceIndex) {
 		this(headSentenceIndex, dependentSentenceIndex, "");
@@ -29,18 +15,10 @@ public class Arc implements Comparable<Arc> {
 		this.label = label;
 	}
 	
-//	public int getHeadId() {
-//		return this.head;
-//	}
-	
 	public int getHeadSentenceIndex() {
 		return this.headSentenceIndex;
 	}
 
-//	public int getDependentId() {
-//		return this.dependent;
-//	}
-	
 	public int getDependentSentenceIndex() {
 		return this.dependentSentenceIndex;
 	}
@@ -86,14 +64,10 @@ public class Arc implements Comparable<Arc> {
 	public String toString() {
 		String result = String.valueOf(this.headSentenceIndex);
 		result += " ";
-//		result += String.valueOf(this.head);
-//		result += " ";
 		result += String.valueOf(this.label);
 		result += " ";
 		result += String.valueOf(this.dependentSentenceIndex);
 		result += " ";
-//		result += String.valueOf(this.dependent);
-//		result += " ";
 		return result + this.getDirection();
 	}
 }
